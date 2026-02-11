@@ -8,6 +8,10 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Articulos from './pages/Articulos';
 import Movimientos from './pages/Movimientos';
+import Stock from './pages/Stock';
+import Reportes from './pages/Reportes';
+import Configuracion from './pages/Configuracion';
+import Usuarios from './pages/Usuarios';
 
 function AppContent() {
   const location = useLocation();
@@ -30,6 +34,11 @@ function AppContent() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/articulos" element={<Articulos />} />
           <Route path="/movimientos" element={<Movimientos />} />
+          <Route path="/Stock" element={<Stock/>}/>
+          <Route path="/Reportes" element={<Reportes/>}/>
+          <Route path="/Usuarios" element={<Usuarios/>}/>
+          <Route path="/Configuracion" element={<Configuracion/>}/>
+          
         </Routes>
       </main>
       {!isAdminPage && <Footer />}
