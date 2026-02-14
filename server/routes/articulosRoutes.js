@@ -1,27 +1,23 @@
+// ============================================================
+// routes/articulosRoutes.js
+// ============================================================
 import express from 'express';
-import { 
-  getArticulos, 
-  getArticuloById, 
-  createArticulo, 
-  updateArticulo, 
-  deleteArticulo,
-  getCategorias,
-  searchArticulos
+import {
+  getArticulos, getArticuloById, createArticulo,
+  updateArticulo, deleteArticulo, getCategorias, searchArticulos
 } from '../controllers/articulosController.js';
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../middleware/authMiddleware.js';
 
-const router = express.Router();
+const articulosRouter = express.Router();
+articulosRouter.use(authMiddleware);
 
-// Todas las rutas requieren autenticación
-router.use(authMiddleware);
+articulosRouter.get('/',           requirePermission('articulos:read'),   getArticulos);
+articulosRouter.get('/search',     requirePermission('articulos:read'),   searchArticulos);
+articulosRouter.get('/categorias', requirePermission('articulos:read'),   getCategorias);
+articulosRouter.get('/:id',        requirePermission('articulos:read'),   getArticuloById);
+articulosRouter.post('/',          requirePermission('articulos:create'), createArticulo);
+articulosRouter.put('/:id',        requirePermission('articulos:update'), updateArticulo);
+articulosRouter.delete('/:id',     requirePermission('articulos:delete'), deleteArticulo);
 
-// Rutas de artículos
-router.get('/', getArticulos);
-router.get('/search', searchArticulos);
-router.get('/categorias', getCategorias);
-router.get('/:id', getArticuloById);
-router.post('/', createArticulo);
-router.put('/:id', updateArticulo);
-router.delete('/:id', deleteArticulo);
-
-export default router;
+export { articulosRouter };
+export default articulosRouter;

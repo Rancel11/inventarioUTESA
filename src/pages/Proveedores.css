@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+/* ========================================
+   PROVEEDORES PAGE
+   ======================================== */
+
+.proveedores-page {
+  min-height: calc(100vh - 200px);
+}
+
+/* ── Tabla ── */
+.proveedores-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  overflow: hidden;
+}
+
+.proveedores-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.proveedores-table thead {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: white;
+}
+
+.proveedores-table th {
+  padding: 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.proveedores-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.proveedores-table tbody tr:hover { background-color: #f8f9fa; }
+
+.proveedores-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+/* Celda nombre + email */
+.proveedor-nombre-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.proveedor-nombre-cell small { font-size: 12px; color: #6c757d; }
+
+/* Count badge */
+.count-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.count-badge.blue { background: #e8ecfd; color: #4361ee; }
+
+/* Btn link */
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: underline;
+  padding: 0;
+}
+.btn-link:hover { color: var(--color-primary); }
+
+/* btn-icon verde */
+.btn-icon.btn-success:hover { background: #d4edda; }
+.btn-icon.btn-success .material-icons { color: #155724; }
+
+/* ── Historial table ── */
+.historial-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.historial-table thead {
+  background: #f8f9fa;
+}
+
+.historial-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-primary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.historial-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.15s;
+}
+
+.historial-table tbody tr:hover { background: #f8f9fa; }
+.historial-table td { padding: 14px 16px; }
+
+/* Estado badges */
+.badge-estado {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-pendiente  { background: #fff3cd; color: #856404; }
+.badge-recibida   { background: #d4edda; color: #155724; }
+.badge-cancelada  { background: #f8d7da; color: #721c24; }
+
+/* ── Items en orden de compra ── */
+.items-section { margin-top: 20px; }
+
+.items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.items-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.item-row {
+  display: grid;
+  grid-template-columns: 1fr 120px auto;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.item-row input[type="number"] {
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  width: 100%;
+}
+
+.item-row input[type="number"]:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+}
+
+/* Modales extra */
+.modal-xl {
+  max-width: 900px !important;
+}
+
+.modal-lg {
+  max-width: 700px !important;
+}
+
+.btn-secondary-light {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+
+.btn-secondary-light:hover { background: rgba(255,255,255,0.3); }
+
+/* Small buttons */
+.btn.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn.btn-sm .material-icons { font-size: 16px; }
+
+.btn.btn-success {
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn.btn-success:hover { background: #218838; }
+
+.btn.btn-danger {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn.btn-danger:hover { background: #c82333; }
+
+/* ── Proveedor tag en artículos ── */
+.proveedor-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.text-muted { color: #adb5bd; font-size: 13px; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .proveedores-table { font-size: 12px; }
+  .proveedores-table th, .proveedores-table td { padding: 10px 8px; }
+  .item-row { grid-template-columns: 1fr 90px auto; }
+  .modal-xl, .modal-lg { max-width: 100% !important; border-radius: 0; max-height: 95vh; }
+}

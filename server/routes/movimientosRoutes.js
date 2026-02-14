@@ -1,21 +1,20 @@
+// ============================================================
+// routes/movimientosRoutes.js
+// ============================================================
 import express from 'express';
-import { 
-  getMovimientos, 
-  getMovimientoById, 
-  createMovimiento,
-  getEstadisticas
+import {
+  getMovimientos, getMovimientoById,
+  createMovimiento, getEstadisticas
 } from '../controllers/movimientosController.js';
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../middleware/authMiddleware.js';
 
-const router = express.Router();
+const movimientosRouter = express.Router();
+movimientosRouter.use(authMiddleware);
 
-// Todas las rutas requieren autenticación
-router.use(authMiddleware);
+movimientosRouter.get('/',             requirePermission('movimientos:read'),   getMovimientos);
+movimientosRouter.get('/estadisticas', requirePermission('movimientos:read'),   getEstadisticas);
+movimientosRouter.get('/:id',          requirePermission('movimientos:read'),   getMovimientoById);
+movimientosRouter.post('/',            requirePermission('movimientos:create'), createMovimiento);
 
-// Rutas de movimientos
-router.get('/', getMovimientos);
-router.get('/estadisticas', getEstadisticas);
-router.get('/:id', getMovimientoById);
-router.post('/', createMovimiento);
-
-export default router;
+export { movimientosRouter };
+export default movimientosRouter;

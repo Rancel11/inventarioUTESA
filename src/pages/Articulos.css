@@ -370,6 +370,72 @@
     max-height: 95vh;
     border-radius: 0;
   }
+  .form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #212529;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%236c757d' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #4361ee;
+  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+.form-select option[value=""] {
+  color: #adb5bd;
+}
+
+/* Tag de categoría en la tabla */
+.categoria-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  background-color: #e8ecfd;
+  color: #4361ee;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Celda de caducidad */
+.caducidad-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.caducidad-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Vencido */
+.badge.caducado {
+  background-color: #fde8e8;
+  color: #c0392b;
+}
+
+/* Por vencer (≤ 30 días) */
+.badge.por-vencer {
+  background-color: #fff3cd;
+  color: #856404;
+}
 }
 
 @media (max-width: 480px) {

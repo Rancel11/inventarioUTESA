@@ -1,161 +1,173 @@
 import React, { useState, useEffect } from 'react';
 import './Stock.css';
-import axios from 'axios';
-import AdminLayout from '../components/AdminLayout'; // Corregido: removí el ;; doble
+import api from '../../server/config/api';
+import AdminLayout from '../components/AdminLayout';
 
 const Stock = () => {
-  const [productos, setProductos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState('todos');
-  const [busqueda, setBusqueda] = useState('');
-  const [modalConfig, setModalConfig] = useState(false);
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
-  const [alertas, setAlertas] = useState([]);
-
-  const [niveles, setNiveles] = useState({
-    stock_minimo: 10,
-    stock_maximo: 100
+  const [productos,           setProductos]           = useState([]);
+  const [alertas,             setAlertas]             = useState([]);
+  const [resumen,             setResumen]             = useState({
+    total_articulos: 0, total_unidades: 0,
+    sin_stock: 0, criticos: 0, bajo_stock: 0,
   });
-
-  const API_URL = 'http://localhost:3000/api';
+  const [loading,             setLoading]             = useState(true);
+  const [filtro,              setFiltro]              = useState('todos');
+  const [busqueda,            setBusqueda]            = useState('');
+  const [modalConfig,         setModalConfig]         = useState(false);
+  const [productoSeleccionado,setProductoSeleccionado]= useState(null);
+  const [niveles,             setNiveles]             = useState({
+    stock_minimo: 0, stock_maximo: 0, ubicacion: '',
+  });
+  const [savingNiveles,       setSavingNiveles]       = useState(false);
 
   useEffect(() => {
-    cargarProductos();
-    cargarAlertas();
+    cargarTodo();
   }, []);
+
+  const cargarTodo = async () => {
+    setLoading(true);
+    await Promise.all([cargarProductos(), cargarAlertas(), cargarResumen()]);
+    setLoading(false);
+  };
 
   const cargarProductos = async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/articulos`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setProductos(response.data);
-    } catch (error) {
-      console.error('Error al cargar productos:', error);
-    } finally {
-      setLoading(false);
-    }
+      const { data } = await api.get('/api/stock');
+      setProductos(data);
+    } catch (e) { console.error('Error al cargar stock:', e); }
   };
 
   const cargarAlertas = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/dashboard/alertas`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setAlertas(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error al cargar alertas:', error);
-    }
+      const { data } = await api.get('/api/stock/alertas');
+      setAlertas(data);
+    } catch (e) { console.error('Error al cargar alertas:', e); }
   };
 
-  const obtenerEstadoStock = (producto) => {
-    if (producto.cantidad === 0) return 'sin-stock';
-    if (producto.cantidad <= (producto.stock_minimo * 0.25)) return 'critico';
-    if (producto.cantidad <= producto.stock_minimo) return 'bajo';
-    if (producto.cantidad >= producto.stock_maximo) return 'sobre-stock';
+  const cargarResumen = async () => {
+    try {
+      const { data } = await api.get('/api/stock/resumen');
+      setResumen(data);
+    } catch (e) { console.error('Error al cargar resumen:', e); }
+  };
+
+  // ── Helpers de estado ──────────────────────────
+  const obtenerEstado = (p) => {
+    const s = p.stock_actual ?? 0;
+    const min = p.stock_minimo ?? 0;
+    const max = p.stock_maximo ?? 0;
+    if (s <= 0)                           return 'sin-stock';
+    if (min > 0 && s <= min * 0.25)       return 'critico';
+    if (min > 0 && s <= min)              return 'bajo';
+    if (max > 0 && s >= max)              return 'sobre-stock';
     return 'normal';
   };
 
-  const obtenerPorcentajeStock = (producto) => {
-    if (producto.stock_minimo === 0) return 100;
-    return Math.round((producto.cantidad / producto.stock_minimo) * 100);
+  const obtenerPorcentaje = (p) => {
+    const s   = p.stock_actual  ?? 0;
+    const max = p.stock_maximo  ?? 0;
+    const min = p.stock_minimo  ?? 0;
+    if (max > 0) return Math.min(Math.round((s / max) * 100), 100);
+    if (min > 0) return Math.min(Math.round((s / min) * 100), 100);
+    return s > 0 ? 100 : 0;
   };
 
-  const productosFiltrados = productos.filter(producto => {
-    const estado = obtenerEstadoStock(producto);
-    const cumpleFiltro = filtro === 'todos' || 
-                        (filtro === 'bajo' && (estado === 'bajo' || estado === 'critico' || estado === 'sin-stock')) ||
-                        (filtro === 'critico' && estado === 'critico') ||
-                        (filtro === 'normal' && estado === 'normal');
+  const colorEstado = (estado) => ({
+    'sin-stock':   '#e74c3c',
+    'critico':     '#e74c3c',
+    'bajo':        '#f39c12',
+    'sobre-stock': '#8e44ad',
+    'normal':      '#27ae60',
+  }[estado] ?? '#27ae60');
 
-    const cumpleBusqueda = producto.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-                          producto.codigo.toLowerCase().includes(busqueda.toLowerCase());
+  const labelEstado = (estado) => ({
+    'sin-stock':   'Sin Stock',
+    'critico':     'Crítico',
+    'bajo':        'Bajo',
+    'sobre-stock': 'Sobre Stock',
+    'normal':      'Normal',
+  }[estado] ?? 'Normal');
+
+  const badgeEstado = (estado) => ({
+    'sin-stock':   'danger',
+    'critico':     'danger',
+    'bajo':        'warning',
+    'sobre-stock': 'info',
+    'normal':      'success',
+  }[estado] ?? 'success');
+
+  // ── Filtros ────────────────────────────────────
+  const productosFiltrados = productos.filter(p => {
+    const estado = obtenerEstado(p);
+    const texto  = busqueda.toLowerCase();
+
+    const cumpleFiltro =
+      filtro === 'todos'  ? true :
+      filtro === 'bajo'   ? ['bajo','critico','sin-stock'].includes(estado) :
+      filtro === 'critico'? estado === 'critico' :
+      filtro === 'normal' ? estado === 'normal'  : true;
+
+    const cumpleBusqueda = !busqueda ||
+      p.nombre?.toLowerCase().includes(texto) ||
+      p.codigo?.toLowerCase().includes(texto) ||
+      p.categoria?.toLowerCase().includes(texto);
 
     return cumpleFiltro && cumpleBusqueda;
   });
 
-  const estadisticas = {
-    total: productos.length,
-    bajo_stock: productos.filter(p => obtenerEstadoStock(p) === 'bajo').length,
-    criticos: productos.filter(p => obtenerEstadoStock(p) === 'critico').length,
-    sin_stock: productos.filter(p => obtenerEstadoStock(p) === 'sin-stock').length
-  };
-
-  const abrirModalConfig = (producto) => {
-    setProductoSeleccionado(producto);
+  // ── Modal config ───────────────────────────────
+  const abrirModalConfig = (p) => {
+    setProductoSeleccionado(p);
     setNiveles({
-      stock_minimo: producto.stock_minimo || 10,
-      stock_maximo: producto.stock_maximo || 100
+      stock_minimo: p.stock_minimo ?? 0,
+      stock_maximo: p.stock_maximo ?? 0,
+      ubicacion:    p.ubicacion    ?? '',
     });
     setModalConfig(true);
   };
 
   const guardarConfiguracion = async () => {
+    setSavingNiveles(true);
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_URL}/articulos/${productoSeleccionado.id}`,
-        {
-          stock_minimo: niveles.stock_minimo,
-          stock_maximo: niveles.stock_maximo
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Configuración actualizada exitosamente');
+      await api.put(`/api/stock/${productoSeleccionado.id}`, {
+        stock_minimo: parseInt(niveles.stock_minimo) || 0,
+        stock_maximo: parseInt(niveles.stock_maximo) || 0,
+        ubicacion:    niveles.ubicacion || null,
+      });
       setModalConfig(false);
-      cargarProductos();
-    } catch (error) {
-      console.error('Error al guardar configuración:', error);
-      alert('Error al guardar configuración');
+      await cargarTodo();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Error al guardar configuración');
+    } finally {
+      setSavingNiveles(false);
     }
   };
 
-  const resolverAlerta = async (alertaId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_URL}/dashboard/alertas/${alertaId}/resolver`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      cargarAlertas();
-    } catch (error) {
-      console.error('Error al resolver alerta:', error);
-    }
-  };
-
-  if (loading) {
-    return (
-      <AdminLayout title="Control de Stock">
-        <div className="dashboard-loading">
-          <div className="spinner"></div>
-          <p>Cargando información de stock...</p>
-        </div>
-      </AdminLayout>
-    );
-  }
+  if (loading) return (
+    <AdminLayout title="Control de Stock">
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Cargando información de stock...</p>
+      </div>
+    </AdminLayout>
+  );
 
   return (
     <AdminLayout title="Control de Stock">
-      {/* Dashboard Content */}
       <div className="dashboard-content">
-        {/* Stats Row */}
+
+        {/* ── Tarjetas de resumen ── */}
         <div className="stats-row">
           <div className="stat-card blue">
             <div className="stat-header">
-              <h3>Total Productos</h3>
+              <h3>Total Artículos</h3>
               <span className="stat-icon material-icons">inventory_2</span>
             </div>
             <div className="stat-body">
-              <p className="stat-number">{estadisticas.total}</p>
+              <p className="stat-number">{resumen.total_articulos ?? 0}</p>
             </div>
             <div className="stat-footer">
-              <span className="stat-period">En inventario</span>
+              <span className="stat-period">{(resumen.total_unidades ?? 0).toLocaleString()} unidades totales</span>
             </div>
           </div>
 
@@ -165,10 +177,10 @@ const Stock = () => {
               <span className="stat-icon material-icons">warning</span>
             </div>
             <div className="stat-body">
-              <p className="stat-number">{estadisticas.bajo_stock}</p>
+              <p className="stat-number">{resumen.bajo_stock ?? 0}</p>
             </div>
             <div className="stat-footer">
-              <span className="stat-period">Requieren atención</span>
+              <span className="stat-period">Bajo mínimo</span>
             </div>
           </div>
 
@@ -178,10 +190,10 @@ const Stock = () => {
               <span className="stat-icon material-icons">error</span>
             </div>
             <div className="stat-body">
-              <p className="stat-number">{estadisticas.criticos}</p>
+              <p className="stat-number">{resumen.criticos ?? 0}</p>
             </div>
             <div className="stat-footer">
-              <span className="stat-period">Reorden urgente</span>
+              <span className="stat-period">≤ 25% del mínimo</span>
             </div>
           </div>
 
@@ -191,7 +203,7 @@ const Stock = () => {
               <span className="stat-icon material-icons">remove_circle</span>
             </div>
             <div className="stat-body">
-              <p className="stat-number">{estadisticas.sin_stock}</p>
+              <p className="stat-number">{resumen.sin_stock ?? 0}</p>
             </div>
             <div className="stat-footer">
               <span className="stat-period">Agotados</span>
@@ -199,173 +211,149 @@ const Stock = () => {
           </div>
         </div>
 
-        {/* Alertas Activas */}
+        {/* ── Panel de alertas ── */}
         {alertas.length > 0 && (
-          <div className="chart-card" style={{ marginBottom: '24px' }}>
+          <div className="chart-card" style={{ marginBottom: 24 }}>
             <div className="card-header">
               <h3>
-                <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px' }}>notifications_active</span>
-                Alertas Activas ({alertas.length})
+                <span className="material-icons" style={{ verticalAlign:'middle', marginRight:8, color:'#f39c12' }}>
+                  notifications_active
+                </span>
+                Alertas de Stock ({alertas.length})
               </h3>
             </div>
-            <div className="card-body">
-              <div className="activity-list">
-                {alertas.map(alerta => (
-                  <div key={alerta.id} className="activity-item">
-                    <div className={`activity-icon ${alerta.tipo_alerta === 'stock_critico' ? 'red' : 'orange'}`}>
-                      <span className="material-icons">warning</span>
+            <div className="card-body" style={{ padding:'12px 24px' }}>
+              <div className="alertas-grid">
+                {alertas.slice(0, 8).map(a => (
+                  <div key={a.id} className={`alerta-chip ${a.tipo_alerta}`}>
+                    <span className="material-icons">
+                      {a.tipo_alerta === 'sin-stock' ? 'remove_circle' :
+                       a.tipo_alerta === 'critico'   ? 'error'         : 'warning'}
+                    </span>
+                    <div>
+                      <strong>{a.nombre}</strong>
+                      <span>{a.codigo} — Stock: {a.stock_actual} / Mín: {a.stock_minimo}</span>
                     </div>
-                    <div className="activity-content">
-                      <p><strong>{alerta.producto_nombre}</strong> - {alerta.mensaje}</p>
-                      <span>Código: {alerta.codigo} | Stock actual: {alerta.nivel_actual}</span>
-                    </div>
-                    <button 
-                      className="btn-filter active"
-                      onClick={() => resolverAlerta(alerta.id)}
-                    >
-                      Resolver
-                    </button>
                   </div>
                 ))}
+                {alertas.length > 8 && (
+                  <div className="alerta-chip mas">
+                    <span className="material-icons">more_horiz</span>
+                    <span>+{alertas.length - 8} más</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Tabla de Productos */}
+        {/* ── Tabla principal ── */}
         <div className="chart-card">
           <div className="card-header">
             <h3>Inventario por Estado</h3>
-            <div className="card-actions">
-              <button 
-                className={`btn-filter ${filtro === 'todos' ? 'active' : ''}`}
-                onClick={() => setFiltro('todos')}
-              >
-                Todos
-              </button>
-              <button 
-                className={`btn-filter ${filtro === 'bajo' ? 'active' : ''}`}
-                onClick={() => setFiltro('bajo')}
-              >
-                Bajo
-              </button>
-              <button 
-                className={`btn-filter ${filtro === 'critico' ? 'active' : ''}`}
-                onClick={() => setFiltro('critico')}
-              >
-                Crítico
-              </button>
-              <button 
-                className={`btn-filter ${filtro === 'normal' ? 'active' : ''}`}
-                onClick={() => setFiltro('normal')}
-              >
-                Normal
-              </button>
+            <div className="card-actions" style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+              {/* Búsqueda */}
+              <div className="stock-search">
+                <span className="material-icons">search</span>
+                <input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+              </div>
+              {/* Filtros */}
+              {['todos','bajo','critico','normal'].map(f => (
+                <button
+                  key={f}
+                  className={`btn-filter ${filtro === f ? 'active' : ''}`}
+                  onClick={() => setFiltro(f)}
+                >
+                  {f === 'todos' ? 'Todos' : f === 'bajo' ? 'Bajo' : f === 'critico' ? 'Crítico' : 'Normal'}
+                </button>
+              ))}
             </div>
           </div>
-          
+
           <div className="card-body">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Stock</th>
-                  <th>Mínimo</th>
-                  <th>Máximo</th>
-                  <th>Estado</th>
-                  <th>Nivel</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {productosFiltrados.length === 0 ? (
+            <div className="stock-table-wrapper">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-                      No hay productos que mostrar
-                    </td>
+                    <th>Código</th>
+                    <th>Artículo</th>
+                    <th>Categoría</th>
+                    <th>Ubicación</th>
+                    <th style={{ textAlign:'center' }}>Stock</th>
+                    <th style={{ textAlign:'center' }}>Mín.</th>
+                    <th style={{ textAlign:'center' }}>Máx.</th>
+                    <th>Nivel</th>
+                    <th>Estado</th>
+                    <th>Config.</th>
                   </tr>
-                ) : (
-                  productosFiltrados.map(producto => {
-                    const estado = obtenerEstadoStock(producto);
-                    const porcentaje = obtenerPorcentajeStock(producto);
-                    
+                </thead>
+                <tbody>
+                  {productosFiltrados.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign:'center', padding:40, color:'#adb5bd' }}>
+                        No hay artículos que mostrar
+                      </td>
+                    </tr>
+                  ) : productosFiltrados.map(p => {
+                    const estado     = obtenerEstado(p);
+                    const porcentaje = obtenerPorcentaje(p);
+                    const color      = colorEstado(estado);
                     return (
-                      <tr key={producto.id}>
-                        <td><strong>{producto.codigo}</strong></td>
-                        <td>{producto.nombre}</td>
-                        <td>
-                          <span className="badge">{producto.categoria}</span>
+                      <tr key={p.id}>
+                        <td><strong>{p.codigo}</strong></td>
+                        <td>{p.nombre}</td>
+                        <td><span className="categoria-tag">{p.categoria}</span></td>
+                        <td className="text-muted">{p.ubicacion || '—'}</td>
+                        <td style={{ textAlign:'center' }}>
+                          <strong style={{ color, fontSize:16 }}>{p.stock_actual ?? 0}</strong>
                         </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <strong style={{ 
-                            color: estado === 'critico' || estado === 'sin-stock' ? '#e74c3c' : 
-                                   estado === 'bajo' ? '#f39c12' : '#27ae60',
-                            fontSize: '16px'
-                          }}>
-                            {producto.cantidad}
-                          </strong>
+                        <td style={{ textAlign:'center', color:'#6c757d' }}>{p.stock_minimo ?? 0}</td>
+                        <td style={{ textAlign:'center', color:'#6c757d' }}>{p.stock_maximo ?? 0}</td>
+                        <td style={{ minWidth:120 }}>
+                          <div className="nivel-bar-wrap">
+                            <div className="nivel-bar-track">
+                              <div
+                                className="nivel-bar-fill"
+                                style={{ width:`${porcentaje}%`, background: color }}
+                              />
+                            </div>
+                            <small style={{ color:'#6c757d', fontSize:11 }}>{porcentaje}%</small>
+                          </div>
                         </td>
-                        <td style={{ textAlign: 'center' }}>{producto.stock_minimo || 10}</td>
-                        <td style={{ textAlign: 'center' }}>{producto.stock_maximo || 100}</td>
                         <td>
-                          <span className={`badge ${
-                            estado === 'sin-stock' ? 'danger' :
-                            estado === 'critico' ? 'danger' :
-                            estado === 'bajo' ? 'warning' : 'success'
-                          }`}>
-                            {estado === 'sin-stock' ? 'Sin Stock' :
-                             estado === 'critico' ? 'Crítico' :
-                             estado === 'bajo' ? 'Bajo' :
-                             estado === 'sobre-stock' ? 'Sobre Stock' : 'Normal'}
+                          <span className={`badge ${badgeEstado(estado)}`}>
+                            {labelEstado(estado)}
                           </span>
                         </td>
                         <td>
-                          <div style={{ 
-                            width: '100%', 
-                            height: '8px', 
-                            background: '#f0f0f0', 
-                            borderRadius: '4px',
-                            overflow: 'hidden',
-                            position: 'relative'
-                          }}>
-                            <div style={{
-                              width: `${Math.min(porcentaje, 100)}%`,
-                              height: '100%',
-                              background: estado === 'critico' || estado === 'sin-stock' ? '#e74c3c' :
-                                        estado === 'bajo' ? '#f39c12' : '#27ae60',
-                              transition: 'width 0.3s ease'
-                            }}></div>
-                          </div>
-                          <small style={{ color: '#6c757d' }}>{porcentaje}%</small>
-                        </td>
-                        <td>
-                          <button 
-                            onClick={() => abrirModalConfig(producto)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '4px'
-                            }}
+                          <button
+                            className="btn-icon"
+                            onClick={() => abrirModalConfig(p)}
                             title="Configurar niveles"
                           >
-                            <span className="material-icons" style={{ color: '#468189' }}>settings</span>
+                            <span className="material-icons">settings</span>
                           </button>
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+
       </div>
 
-      {/* Modal */}
-      {modalConfig && (
+      {/* ════════════════════════════════
+          MODAL: Configurar niveles
+          ════════════════════════════════ */}
+      {modalConfig && productoSeleccionado && (
         <div className="stock-modal-overlay" onClick={() => setModalConfig(false)}>
           <div className="stock-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="stock-modal-header">
@@ -380,18 +368,19 @@ const Stock = () => {
 
             <div className="stock-modal-body">
               <div className="stock-producto-info">
-                <h3>{productoSeleccionado?.nombre}</h3>
-                <p>Código: <strong>{productoSeleccionado?.codigo}</strong></p>
-                <p>Stock actual: <strong>{productoSeleccionado?.cantidad}</strong> unidades</p>
+                <h3>{productoSeleccionado.nombre}</h3>
+                <p>Código: <strong>{productoSeleccionado.codigo}</strong></p>
+                <p>Stock actual: <strong style={{ color: colorEstado(obtenerEstado(productoSeleccionado)) }}>
+                  {productoSeleccionado.stock_actual ?? 0} unidades
+                </strong></p>
               </div>
 
               <div className="stock-form-group">
                 <label>Stock Mínimo</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="number" min="0"
                   value={niveles.stock_minimo}
-                  onChange={(e) => setNiveles({ ...niveles, stock_minimo: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setNiveles({ ...niveles, stock_minimo: e.target.value })}
                 />
                 <small>Alerta cuando el stock llegue a este nivel</small>
               </div>
@@ -399,24 +388,32 @@ const Stock = () => {
               <div className="stock-form-group">
                 <label>Stock Máximo</label>
                 <input
-                  type="number"
-                  min="0"
+                  type="number" min="0"
                   value={niveles.stock_maximo}
-                  onChange={(e) => setNiveles({ ...niveles, stock_maximo: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setNiveles({ ...niveles, stock_maximo: e.target.value })}
                 />
-                <small>Nivel máximo recomendado de stock</small>
+                <small>Nivel máximo recomendado de almacenamiento</small>
+              </div>
+
+              <div className="stock-form-group">
+                <label>Ubicación en Almacén</label>
+                <input
+                  type="text" placeholder="Ej: Estante A-3, Pasillo 2..."
+                  value={niveles.ubicacion}
+                  onChange={(e) => setNiveles({ ...niveles, ubicacion: e.target.value })}
+                />
               </div>
 
               <div className="stock-alert-info">
                 <strong>
                   <span className="material-icons">info</span>
-                  Niveles de alerta:
+                  Niveles de alerta con estos valores:
                 </strong>
                 <ul>
-                  <li>🔴 <strong>Crítico:</strong> ≤ 25% del mínimo ({Math.round(niveles.stock_minimo * 0.25)} unidades)</li>
-                  <li>⚠️ <strong>Bajo:</strong> ≤ Stock mínimo ({niveles.stock_minimo} unidades)</li>
-                  <li>✅ <strong>Normal:</strong> Entre mínimo y máximo</li>
-                  <li>📦 <strong>Sobre stock:</strong> ≥ Stock máximo ({niveles.stock_maximo} unidades)</li>
+                  <li>🔴 <strong>Crítico:</strong> ≤ {Math.round((parseInt(niveles.stock_minimo)||0) * 0.25)} uds (25% del mínimo)</li>
+                  <li>⚠️ <strong>Bajo:</strong> ≤ {parseInt(niveles.stock_minimo)||0} uds (mínimo)</li>
+                  <li>✅ <strong>Normal:</strong> entre {parseInt(niveles.stock_minimo)||0} y {parseInt(niveles.stock_maximo)||0} uds</li>
+                  <li>📦 <strong>Sobre stock:</strong> ≥ {parseInt(niveles.stock_maximo)||0} uds</li>
                 </ul>
               </div>
             </div>
@@ -425,14 +422,15 @@ const Stock = () => {
               <button className="stock-btn-secondary" onClick={() => setModalConfig(false)}>
                 Cancelar
               </button>
-              <button className="stock-btn-primary" onClick={guardarConfiguracion}>
+              <button className="stock-btn-primary" onClick={guardarConfiguracion} disabled={savingNiveles}>
                 <span className="material-icons">save</span>
-                Guardar Configuración
+                {savingNiveles ? 'Guardando...' : 'Guardar Configuración'}
               </button>
             </div>
           </div>
         </div>
       )}
+
     </AdminLayout>
   );
 };

@@ -2,80 +2,113 @@ import React, { useState, useEffect } from 'react';
 import AdminLayout from '../components/AdminLayout';
 import api from '../../server/config/api';
 import './Articulos.css';
-import '../pages/Dashboard.css';
+
+const CATEGORIAS = [
+  'Alimentos y Bebidas','Artículos de Limpieza','Artículos de Oficina',
+  'Electrónica','Ferretería y Herramientas','Farmacéuticos',
+  'Indumentaria y Textiles','Insumos Médicos','Lubricantes y Químicos',
+  'Maquinaria y Repuestos','Materiales de Construcción','Materias Primas',
+  'Papelería','Productos de Higiene','Utensilios y Menaje','Otro',
+];
+
+const EMPTY_FORM = {
+  codigo:'', nombre:'', descripcion:'', categoria:'',
+  proveedor_id:'', fecha_caducidad:'',
+  stock_inicial:'', stock_minimo:'', stock_maximo:'', ubicacion:'',
+};
 
 const Articulos = () => {
-  const [articulos, setArticulos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [articulos,   setArticulos]   = useState([]);
+  const [proveedores, setProveedores] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [searchTerm,  setSearchTerm]  = useState('');
+  const [showModal,   setShowModal]   = useState(false);
   const [editingArticulo, setEditingArticulo] = useState(null);
-  const [formData, setFormData] = useState({
-    codigo: '',
-    nombre: '',
-    descripcion: '',
-    categoria: '',
-    precio_compra: '',
-    precio_venta: '',
-    stock_inicial: '',
-    stock_minimo: '',
-    stock_maximo: '',
-    ubicacion: ''
-  });
+  const [formData,    setFormData]    = useState(EMPTY_FORM);
+
+  const permisos = JSON.parse(localStorage.getItem('user') || '{}').permisos ?? [];
+  const can = (p) => permisos.includes(p);
 
   useEffect(() => {
     fetchArticulos();
+    fetchProveedores();
   }, []);
 
   const fetchArticulos = async () => {
     try {
-      const response = await api.get('/api/articulos');
-      setArticulos(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error al cargar artículos:', error);
-      setLoading(false);
+      const { data } = await api.get('/api/articulos');
+      setArticulos(data);
+    } catch (e) { 
+      console.error('Error al cargar artículos:', e); 
+      alert('Error al cargar artículos');
+    }
+    finally { setLoading(false); }
+  };
+
+  const fetchProveedores = async () => {
+    try {
+      const { data } = await api.get('/api/proveedores');
+      setProveedores(data);
+    } catch (e) { 
+      console.error('Error al cargar proveedores:', e); 
     }
   };
 
   const handleSearch = async (e) => {
     const value = e.target.value;
     setSearchTerm(value);
-
-    if (value.trim() === '') {
-      fetchArticulos();
-      return;
-    }
-
+    if (!value.trim()) { fetchArticulos(); return; }
     try {
-      const response = await api.get(`/api/articulos/search?q=${value}`);
-      setArticulos(response.data);
-    } catch (error) {
-      console.error('Error en búsqueda:', error);
-    }
+      const { data } = await api.get(`/api/articulos/search?q=${value}`);
+      setArticulos(data);
+    } catch (e) { console.error(e); }
   };
 
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Preparar datos para enviar
+    const dataToSend = { ...formData };
+    
+    // Convertir strings vacíos a null para campos opcionales
+    if (dataToSend.proveedor_id === '') dataToSend.proveedor_id = null;
+    if (dataToSend.descripcion === '') dataToSend.descripcion = null;
+    if (dataToSend.fecha_caducidad === '') dataToSend.fecha_caducidad = null;
+    if (dataToSend.ubicacion === '') dataToSend.ubicacion = null;
+    
+    // Convertir números - IMPORTANTE: si es vacío, no enviar el campo
+    if (dataToSend.stock_inicial === '') {
+      delete dataToSend.stock_inicial;
+    } else if (dataToSend.stock_inicial) {
+      dataToSend.stock_inicial = parseInt(dataToSend.stock_inicial) || 0;
+    }
+    
+    if (dataToSend.stock_minimo === '') {
+      delete dataToSend.stock_minimo;
+    } else if (dataToSend.stock_minimo) {
+      dataToSend.stock_minimo = parseInt(dataToSend.stock_minimo) || 0;
+    }
+    
+    if (dataToSend.stock_maximo === '') {
+      delete dataToSend.stock_maximo;
+    } else if (dataToSend.stock_maximo) {
+      dataToSend.stock_maximo = parseInt(dataToSend.stock_maximo) || 0;
+    }
 
     try {
       if (editingArticulo) {
-        // Actualizar
-        await api.put(`/api/articulos/${editingArticulo.id}`, formData);
+        await api.put(`/api/articulos/${editingArticulo.id}`, dataToSend);
+        alert('Artículo actualizado exitosamente');
       } else {
-        // Crear nuevo
-        await api.post('/api/articulos', formData);
+        await api.post('/api/articulos', dataToSend);
+        alert('Artículo creado exitosamente');
       }
-
-      setShowModal(false);
-      resetForm();
+      closeModal();
       fetchArticulos();
     } catch (error) {
       console.error('Error al guardar artículo:', error);
@@ -83,309 +116,250 @@ const Articulos = () => {
     }
   };
 
-  const handleEdit = (articulo) => {
-    setEditingArticulo(articulo);
+  const handleEdit = (art) => {
+    setEditingArticulo(art);
     setFormData({
-      codigo: articulo.codigo,
-      nombre: articulo.nombre,
-      descripcion: articulo.descripcion || '',
-      categoria: articulo.categoria,
-      precio_compra: articulo.precio_compra,
-      precio_venta: articulo.precio_venta,
-      stock_minimo: articulo.stock_minimo || '',
-      stock_maximo: articulo.stock_maximo || '',
-      ubicacion: articulo.ubicacion || ''
+      codigo:         art.codigo,
+      nombre:         art.nombre,
+      descripcion:    art.descripcion    || '',
+      categoria:      art.categoria,
+      proveedor_id:   art.proveedor_id   || '',
+      fecha_caducidad: art.fecha_caducidad
+        ? art.fecha_caducidad.substring(0, 10) : '',
+      stock_minimo:   art.stock_minimo   || '',
+      stock_maximo:   art.stock_maximo   || '',
+      ubicacion:      art.ubicacion      || '',
     });
     setShowModal(true);
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este artículo?')) {
-      return;
-    }
-
+    if (!window.confirm('¿Estás seguro de eliminar este artículo?')) return;
     try {
       await api.delete(`/api/articulos/${id}`);
+      alert('Artículo eliminado exitosamente');
       fetchArticulos();
-    } catch (error) {
-      console.error('Error al eliminar artículo:', error);
-      alert('Error al eliminar artículo');
+    } catch (e) { 
+      console.error('Error al eliminar:', e);
+      alert('Error al eliminar artículo'); 
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      codigo: '',
-      nombre: '',
-      descripcion: '',
-      categoria: '',
-      precio_compra: '',
-      precio_venta: '',
-      stock_inicial: '',
-      stock_minimo: '',
-      stock_maximo: '',
-      ubicacion: ''
-    });
+  const closeModal = () => {
+    setShowModal(false);
     setEditingArticulo(null);
+    setFormData(EMPTY_FORM);
   };
 
   const getStockStatus = (stock, minimo) => {
-    if (stock <= 0) return { class: 'sin-stock', text: 'Sin Stock' };
-    if (stock <= minimo) return { class: 'stock-bajo', text: 'Stock Bajo' };
-    return { class: 'disponible', text: 'Disponible' };
+    if (stock <= 0)       return { cls: 'sin-stock',  text: 'Sin Stock'  };
+    if (stock <= minimo)  return { cls: 'stock-bajo', text: 'Stock Bajo' };
+    return                       { cls: 'disponible', text: 'Disponible' };
   };
 
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Cargando artículos...</p>
-      </div>
-    );
-  }
+  const getCaducidadStatus = (fecha) => {
+    if (!fecha) return null;
+    const diff = Math.ceil((new Date(fecha) - new Date()) / 86400000);
+    if (diff <  0)  return { cls: 'caducado',   label: 'Vencido'           };
+    if (diff <= 30) return { cls: 'por-vencer', label: `Vence en ${diff}d` };
+    return null;
+  };
+
+  const fmt = (f) => f
+    ? new Date(f).toLocaleDateString('es-ES',{ day:'2-digit',month:'2-digit',year:'numeric' })
+    : '—';
+
+  if (loading) return (
+    <div className="loading-container">
+      <div className="spinner"></div><p>Cargando artículos...</p>
+    </div>
+  );
 
   return (
     <AdminLayout title="Gestión de Artículos">
       <div className="articulos-page">
+
         <div className="page-header">
-          <div>
-            <p style={{fontSize: '16px', color: '#6c757d', margin: 0}}>
-              Administra el catálogo de productos del inventario
-            </p>
+          <p style={{ fontSize:16, color:'#6c757d', margin:0 }}>
+            Administra el catálogo de productos del inventario
+          </p>
+          {can('articulos:create') && (
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+              <span className="material-icons">add</span>Nuevo Artículo
+            </button>
+          )}
+        </div>
+
+        <div className="filters-section">
+          <div className="search-box-large">
+            <span className="material-icons">search</span>
+            <input type="text" placeholder="Buscar por código, nombre o categoría..."
+              value={searchTerm} onChange={handleSearch} />
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            <span className="material-icons">add</span>
-            Nuevo Artículo
-          </button>
         </div>
 
-      <div className="filters-section">
-        <div className="search-box-large">
-          <span className="material-icons">search</span>
-          <input
-            type="text"
-            placeholder="Buscar por código, nombre o categoría..."
-            value={searchTerm}
-            onChange={handleSearch}
-          />
-        </div>
-      </div>
-
-      <div className="articulos-table-container">
-        <table className="articulos-table">
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Nombre</th>
-              <th>Categoría</th>
-              <th>Stock</th>
-              <th>Precio Compra</th>
-              <th>Precio Venta</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {articulos.length === 0 ? (
+        <div className="articulos-table-container">
+          <table className="articulos-table">
+            <thead>
               <tr>
-                <td colSpan="8" className="text-center">
+                <th>Código</th><th>Nombre</th><th>Categoría</th>
+                <th>Proveedor</th><th>Stock</th>
+                <th>Fecha Caducidad</th><th>Estado</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {articulos.length === 0 ? (
+                <tr><td colSpan="8">
                   <div className="empty-state">
                     <span className="material-icons">inventory_2</span>
                     <p>No hay artículos registrados</p>
                   </div>
-                </td>
-              </tr>
-            ) : (
-              articulos.map((articulo) => {
-                const status = getStockStatus(articulo.stock_actual, articulo.stock_minimo);
+                </td></tr>
+              ) : articulos.map((art) => {
+                const st  = getStockStatus(art.stock_actual, art.stock_minimo);
+                const cad = getCaducidadStatus(art.fecha_caducidad);
                 return (
-                  <tr key={articulo.id}>
-                    <td><strong>{articulo.codigo}</strong></td>
-                    <td>{articulo.nombre}</td>
-                    <td>{articulo.categoria}</td>
+                  <tr key={art.id}>
+                    <td><strong>{art.codigo}</strong></td>
+                    <td>{art.nombre}</td>
+                    <td><span className="categoria-tag">{art.categoria}</span></td>
                     <td>
-                      <span className="stock-badge">{articulo.stock_actual || 0}</span>
+                      {art.proveedor_nombre
+                        ? <span className="proveedor-tag">{art.proveedor_nombre}</span>
+                        : <span className="text-muted">—</span>}
                     </td>
-                    <td>${parseFloat(articulo.precio_compra || 0).toFixed(2)}</td>
-                    <td>${parseFloat(articulo.precio_venta || 0).toFixed(2)}</td>
+                    <td><span className="stock-badge">{art.stock_actual || 0}</span></td>
                     <td>
-                      <span className={`badge ${status.class}`}>{status.text}</span>
+                      <div className="caducidad-cell">
+                        <span>{fmt(art.fecha_caducidad)}</span>
+                        {cad && (
+                          <span className={`badge caducidad-badge ${cad.cls}`}>{cad.label}</span>
+                        )}
+                      </div>
                     </td>
+                    <td><span className={`badge ${st.cls}`}>{st.text}</span></td>
                     <td>
                       <div className="action-buttons">
-                        <button 
-                          className="btn-icon" 
-                          onClick={() => handleEdit(articulo)}
-                          title="Editar"
-                        >
-                          <span className="material-icons">edit</span>
-                        </button>
-                        <button 
-                          className="btn-icon btn-danger" 
-                          onClick={() => handleDelete(articulo.id)}
-                          title="Eliminar"
-                        >
-                          <span className="material-icons">delete</span>
-                        </button>
+                        {can('articulos:update') && (
+                          <button className="btn-icon" onClick={() => handleEdit(art)} title="Editar">
+                            <span className="material-icons">edit</span>
+                          </button>
+                        )}
+                        {can('articulos:delete') && (
+                          <button className="btn-icon btn-danger" onClick={() => handleDelete(art.id)} title="Eliminar">
+                            <span className="material-icons">delete</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      {/* Modal de Crear/Editar */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => {
-          setShowModal(false);
-          resetForm();
-        }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingArticulo ? 'Editar Artículo' : 'Nuevo Artículo'}</h2>
-              <button className="close-btn" onClick={() => {
-                setShowModal(false);
-                resetForm();
-              }}>
-                <span className="material-icons">close</span>
-              </button>
-            </div>
+        {/* ── Modal ── */}
+        {showModal && (
+          <div className="modal-overlay" onClick={closeModal}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{editingArticulo ? 'Editar Artículo' : 'Nuevo Artículo'}</h2>
+                <button className="close-btn" onClick={closeModal}>
+                  <span className="material-icons">close</span>
+                </button>
+              </div>
 
-            <div className="modal-body">
-              <form onSubmit={handleSubmit} id="articuloForm">
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label>Código *</label>
-                    <input
-                      type="text"
-                      name="codigo"
-                      value={formData.codigo}
-                      onChange={handleInputChange}
-                      required
-                      disabled={editingArticulo}
-                    />
-                  </div>
+              <div className="modal-body">
+                <form onSubmit={handleSubmit} id="articuloForm">
+                  <div className="form-grid">
 
-                  <div className="form-group">
-                    <label>Nombre *</label>
-                    <input
-                      type="text"
-                      name="nombre"
-                      value={formData.nombre}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group full-width">
-                    <label>Descripción</label>
-                    <textarea
-                      name="descripcion"
-                      value={formData.descripcion}
-                      onChange={handleInputChange}
-                      rows="3"
-                    ></textarea>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Categoría *</label>
-                    <input
-                      type="text"
-                      name="categoria"
-                      value={formData.categoria}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Ubicación</label>
-                    <input
-                      type="text"
-                      name="ubicacion"
-                      value={formData.ubicacion}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Precio Compra</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="precio_compra"
-                      value={formData.precio_compra}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Precio Venta</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="precio_venta"
-                      value={formData.precio_venta}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-
-                  {!editingArticulo && (
                     <div className="form-group">
-                      <label>Stock Inicial</label>
-                      <input
-                        type="number"
-                        name="stock_inicial"
-                        value={formData.stock_inicial}
-                        onChange={handleInputChange}
-                      />
+                      <label>Código *</label>
+                      <input type="text" name="codigo" value={formData.codigo}
+                        onChange={handleInputChange} required disabled={!!editingArticulo} />
                     </div>
-                  )}
 
-                  <div className="form-group">
-                    <label>Stock Mínimo</label>
-                    <input
-                      type="number"
-                      name="stock_minimo"
-                      value={formData.stock_minimo}
-                      onChange={handleInputChange}
-                    />
+                    <div className="form-group">
+                      <label>Nombre *</label>
+                      <input type="text" name="nombre" value={formData.nombre}
+                        onChange={handleInputChange} required />
+                    </div>
+
+                    <div className="form-group full-width">
+                      <label>Descripción</label>
+                      <textarea name="descripcion" value={formData.descripcion}
+                        onChange={handleInputChange} rows="3" />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Categoría *</label>
+                      <select name="categoria" value={formData.categoria}
+                        onChange={handleInputChange} required className="form-select">
+                        <option value="">— Selecciona una categoría —</option>
+                        {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Proveedor</label>
+                      <select name="proveedor_id" value={formData.proveedor_id}
+                        onChange={handleInputChange} className="form-select">
+                        <option value="">— Sin proveedor —</option>
+                        {proveedores.map((p) => (
+                          <option key={p.id} value={p.id}>{p.nombre} ({p.codigo})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Fecha de Caducidad</label>
+                      <input type="date" name="fecha_caducidad" value={formData.fecha_caducidad}
+                        onChange={handleInputChange} />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Ubicación</label>
+                      <input type="text" name="ubicacion" value={formData.ubicacion}
+                        onChange={handleInputChange} />
+                    </div>
+
+                    {!editingArticulo && (
+                      <div className="form-group">
+                        <label>Stock Inicial</label>
+                        <input type="number" name="stock_inicial" value={formData.stock_inicial}
+                          onChange={handleInputChange} min="0" />
+                      </div>
+                    )}
+
+                    <div className="form-group">
+                      <label>Stock Mínimo</label>
+                      <input type="number" name="stock_minimo" value={formData.stock_minimo}
+                        onChange={handleInputChange} min="0" />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Stock Máximo</label>
+                      <input type="number" name="stock_maximo" value={formData.stock_maximo}
+                        onChange={handleInputChange} min="0" />
+                    </div>
+
                   </div>
+                </form>
+              </div>
 
-                  <div className="form-group">
-                    <label>Stock Máximo</label>
-                    <input
-                      type="number"
-                      name="stock_maximo"
-                      value={formData.stock_maximo}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="btn btn-secondary"
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
-              >
-                Cancelar
-              </button>
-              <button type="submit" form="articuloForm" className="btn btn-primary">
-                {editingArticulo ? 'Actualizar' : 'Crear'} Artículo
-              </button>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={closeModal}>
+                  Cancelar
+                </button>
+                <button type="submit" form="articuloForm" className="btn btn-primary">
+                  {editingArticulo ? 'Actualizar' : 'Crear'} Artículo
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
       </div>
     </AdminLayout>
   );

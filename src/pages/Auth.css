@@ -1,95 +1,183 @@
+/* ========================================
+   AUTH PAGES (Login + Register)
+   ======================================== */
+
 .auth-container {
   min-height: calc(100vh - 300px);
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 40px 20px;
+  background: #f8f9fa;
 }
 
 .auth-card {
-  background-color: var(--color-white);
+  background: white;
   border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
   padding: 40px;
   max-width: 450px;
   width: 100%;
 }
 
+/* ── Header ── */
 .auth-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 28px;
+}
+
+.auth-logo {
+  margin-bottom: 12px;
 }
 
 .auth-header h2 {
-  color: var(--color-primary);
-  font-size: 28px;
-  margin-bottom: 10px;
+  color: var(--color-primary, #2c3e50);
+  font-size: 26px;
+  margin-bottom: 6px;
 }
 
 .auth-header p {
-  color: var(--color-text-light);
-  font-size: 16px;
+  color: #6c757d;
+  font-size: 15px;
 }
 
+/* ── Banner informativo ── */
+.info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #e8ecfd;
+  border: 1px solid #c5cdf8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #3a4ca8;
+  line-height: 1.5;
+}
+
+.info-banner .material-icons {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Mensajes de estado ── */
+.error-message {
+  background: #fde8e8;
+  color: #c0392b;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  border: 1px solid #f5c6c6;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.success-message {
+  background: #d4edda;
+  color: #155724;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  border: 1px solid #c3e6cb;
+}
+
+/* ── Formulario ── */
 .auth-form {
   margin-bottom: 20px;
 }
 
-.btn-block {
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-primary, #2c3e50);
+  margin-bottom: 6px;
+}
+
+.form-group input {
   width: 100%;
-  margin-top: 10px;
-}
-
-.error-message {
-  background-color: #fee;
-  color: #c33;
-  padding: 12px;
+  padding: 12px 14px;
+  border: 2px solid #e0e0e0;
   border-radius: 8px;
-  margin-bottom: 20px;
-  text-align: center;
   font-size: 14px;
-  border: 1px solid #fcc;
+  color: #212529;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
 }
 
-.success-message {
-  background-color: #efe;
-  color: #3c3;
-  padding: 12px;
+.form-group input:focus {
+  outline: none;
+  border-color: var(--color-secondary, #468189);
+  box-shadow: 0 0 0 3px rgba(70, 129, 137, 0.12);
+}
+
+/* ── Botones ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
   border-radius: 8px;
-  margin-bottom: 20px;
-  text-align: center;
-  font-size: 14px;
-  border: 1px solid #cfc;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
 }
 
+.btn-primary {
+  background: linear-gradient(135deg,
+    var(--color-primary,   #2c3e50) 0%,
+    var(--color-secondary, #468189) 100%);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-block { width: 100%; margin-top: 6px; }
+
+/* ── Footer ── */
 .auth-footer {
   text-align: center;
   padding-top: 20px;
-  border-top: 1px solid var(--color-light);
+  border-top: 1px solid #f0f0f0;
 }
 
 .auth-footer p {
-  color: var(--color-text-light);
+  color: #6c757d;
   font-size: 14px;
 }
 
 .auth-footer a {
-  color: var(--color-secondary);
+  color: var(--color-secondary, #468189);
   text-decoration: none;
   font-weight: 600;
 }
 
 .auth-footer a:hover {
-  color: var(--color-accent);
+  color: var(--color-primary, #2c3e50);
   text-decoration: underline;
 }
 
-@media (max-width: 768px) {
+/* ── Responsive ── */
+@media (max-width: 480px) {
   .auth-card {
-    padding: 30px 20px;
+    padding: 28px 20px;
   }
-  
-  .auth-header h2 {
-    font-size: 24px;
-  }
+
+  .auth-header h2 { font-size: 22px; }
+
+  .btn-block { font-size: 14px; }
 }

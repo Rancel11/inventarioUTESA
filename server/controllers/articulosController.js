@@ -4,9 +4,17 @@ import db from '../config/database.js';
 export const getArticulos = async (req, res) => {
   try {
     const [articulos] = await db.query(`
-      SELECT a.*, s.cantidad as stock_actual, s.stock_minimo, s.stock_maximo, s.ubicacion
+      SELECT 
+        a.*, 
+        s.cantidad as stock_actual, 
+        s.stock_minimo, 
+        s.stock_maximo, 
+        s.ubicacion,
+        p.nombre as proveedor_nombre,
+        p.codigo as proveedor_codigo
       FROM articulos a
       LEFT JOIN stock s ON a.id = s.articulo_id
+      LEFT JOIN proveedores p ON a.proveedor_id = p.id
       WHERE a.activo = true
       ORDER BY a.fecha_creacion DESC
     `);
@@ -24,9 +32,17 @@ export const getArticuloById = async (req, res) => {
     const { id } = req.params;
 
     const [articulos] = await db.query(`
-      SELECT a.*, s.cantidad as stock_actual, s.stock_minimo, s.stock_maximo, s.ubicacion
+      SELECT 
+        a.*, 
+        s.cantidad as stock_actual, 
+        s.stock_minimo, 
+        s.stock_maximo, 
+        s.ubicacion,
+        p.nombre as proveedor_nombre,
+        p.codigo as proveedor_codigo
       FROM articulos a
       LEFT JOIN stock s ON a.id = s.articulo_id
+      LEFT JOIN proveedores p ON a.proveedor_id = p.id
       WHERE a.id = ? AND a.activo = true
     `, [id]);
 
@@ -48,10 +64,16 @@ export const createArticulo = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const { codigo, nombre, descripcion, categoria, precio_compra, precio_venta, stock_inicial, stock_minimo, stock_maximo, ubicacion } = req.body;
+    const {
+      codigo, nombre, descripcion, categoria,
+      proveedor_id,
+      fecha_caducidad,
+      stock_inicial, stock_minimo, stock_maximo, ubicacion
+    } = req.body;
 
     // Validar campos requeridos
     if (!codigo || !nombre || !categoria) {
+      await connection.rollback();
       return res.status(400).json({ message: 'Código, nombre y categoría son requeridos' });
     }
 
@@ -63,10 +85,32 @@ export const createArticulo = async (req, res) => {
       return res.status(400).json({ message: 'El código del artículo ya existe' });
     }
 
-    // Insertar artículo
+    // Validar proveedor si se proporciona
+    if (proveedor_id) {
+      const [proveedorExists] = await connection.query(
+        'SELECT id FROM proveedores WHERE id = ? AND activo = true',
+        [proveedor_id]
+      );
+      
+      if (proveedorExists.length === 0) {
+        await connection.rollback();
+        return res.status(400).json({ message: 'Proveedor no encontrado o inactivo' });
+      }
+    }
+
+    // Insertar artículo (CON proveedor_id y fecha_caducidad)
     const [resultArticulo] = await connection.query(
-      'INSERT INTO articulos (codigo, nombre, descripcion, categoria, precio_compra, precio_venta) VALUES (?, ?, ?, ?, ?, ?)',
-      [codigo, nombre, descripcion || null, categoria, precio_compra || 0, precio_venta || 0]
+      `INSERT INTO articulos 
+       (codigo, nombre, descripcion, categoria, proveedor_id, fecha_caducidad) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        codigo, 
+        nombre, 
+        descripcion || null, 
+        categoria, 
+        proveedor_id || null, 
+        fecha_caducidad || null
+      ]
     );
 
     const articuloId = resultArticulo.insertId;
@@ -90,9 +134,17 @@ export const createArticulo = async (req, res) => {
 
     // Obtener el artículo completo creado
     const [nuevoArticulo] = await connection.query(`
-      SELECT a.*, s.cantidad as stock_actual, s.stock_minimo, s.stock_maximo, s.ubicacion
+      SELECT 
+        a.*, 
+        s.cantidad as stock_actual, 
+        s.stock_minimo, 
+        s.stock_maximo, 
+        s.ubicacion,
+        p.nombre as proveedor_nombre,
+        p.codigo as proveedor_codigo
       FROM articulos a
       LEFT JOIN stock s ON a.id = s.articulo_id
+      LEFT JOIN proveedores p ON a.proveedor_id = p.id
       WHERE a.id = ?
     `, [articuloId]);
 
@@ -112,56 +164,111 @@ export const createArticulo = async (req, res) => {
 
 // Actualizar artículo
 export const updateArticulo = async (req, res) => {
+  const connection = await db.getConnection();
+  
   try {
+    await connection.beginTransaction();
+    
     const { id } = req.params;
-    const { codigo, nombre, descripcion, categoria, precio_compra, precio_venta, stock_minimo, stock_maximo, ubicacion } = req.body;
+    const {
+      codigo, nombre, descripcion, categoria,
+      proveedor_id,
+      fecha_caducidad,
+      stock_minimo, stock_maximo, ubicacion
+    } = req.body;
 
     // Verificar si el artículo existe
-    const [existing] = await db.query('SELECT id FROM articulos WHERE id = ? AND activo = true', [id]);
+    const [existing] = await connection.query('SELECT id FROM articulos WHERE id = ? AND activo = true', [id]);
     
     if (existing.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ message: 'Artículo no encontrado' });
     }
 
     // Verificar si el código ya existe en otro artículo
     if (codigo) {
-      const [duplicado] = await db.query('SELECT id FROM articulos WHERE codigo = ? AND id != ?', [codigo, id]);
+      const [duplicado] = await connection.query('SELECT id FROM articulos WHERE codigo = ? AND id != ?', [codigo, id]);
       
       if (duplicado.length > 0) {
+        await connection.rollback();
         return res.status(400).json({ message: 'El código del artículo ya existe' });
       }
     }
 
-    // Actualizar artículo
-    await db.query(
+    // Validar proveedor si se proporciona
+    if (proveedor_id !== undefined && proveedor_id !== null && proveedor_id !== '') {
+      const [proveedorExists] = await connection.query(
+        'SELECT id FROM proveedores WHERE id = ? AND activo = true',
+        [proveedor_id]
+      );
+      
+      if (proveedorExists.length === 0) {
+        await connection.rollback();
+        return res.status(400).json({ message: 'Proveedor no encontrado o inactivo' });
+      }
+    }
+
+    // Actualizar artículo (CON proveedor_id y fecha_caducidad)
+    // Si proveedor_id viene como string vacío, lo convertimos a null
+    const proveedorValue = (proveedor_id === '' || proveedor_id === undefined) ? null : proveedor_id;
+    
+    await connection.query(
       `UPDATE articulos SET 
         codigo = COALESCE(?, codigo),
         nombre = COALESCE(?, nombre),
         descripcion = ?,
         categoria = COALESCE(?, categoria),
-        precio_compra = COALESCE(?, precio_compra),
-        precio_venta = COALESCE(?, precio_venta)
+        proveedor_id = ?,
+        fecha_caducidad = ?
       WHERE id = ?`,
-      [codigo, nombre, descripcion, categoria, precio_compra, precio_venta, id]
+      [codigo, nombre, descripcion, categoria, proveedorValue, fecha_caducidad || null, id]
     );
 
     // Actualizar stock si se proporcionaron valores
     if (stock_minimo !== undefined || stock_maximo !== undefined || ubicacion !== undefined) {
-      await db.query(
-        `UPDATE stock SET 
-          stock_minimo = COALESCE(?, stock_minimo),
-          stock_maximo = COALESCE(?, stock_maximo),
-          ubicacion = ?
-        WHERE articulo_id = ?`,
-        [stock_minimo, stock_maximo, ubicacion, id]
-      );
+      // Construir la query dinámicamente solo con los campos que se proporcionan
+      const updates = [];
+      const values = [];
+      
+      if (stock_minimo !== undefined) {
+        updates.push('stock_minimo = ?');
+        values.push(stock_minimo);
+      }
+      
+      if (stock_maximo !== undefined) {
+        updates.push('stock_maximo = ?');
+        values.push(stock_maximo);
+      }
+      
+      if (ubicacion !== undefined) {
+        updates.push('ubicacion = ?');
+        values.push(ubicacion);
+      }
+      
+      if (updates.length > 0) {
+        values.push(id); // agregar el ID al final
+        await connection.query(
+          `UPDATE stock SET ${updates.join(', ')} WHERE articulo_id = ?`,
+          values
+        );
+      }
     }
 
+    await connection.commit();
+
     // Obtener el artículo actualizado
-    const [articuloActualizado] = await db.query(`
-      SELECT a.*, s.cantidad as stock_actual, s.stock_minimo, s.stock_maximo, s.ubicacion
+    const [articuloActualizado] = await connection.query(`
+      SELECT 
+        a.*, 
+        s.cantidad as stock_actual, 
+        s.stock_minimo, 
+        s.stock_maximo, 
+        s.ubicacion,
+        p.nombre as proveedor_nombre,
+        p.codigo as proveedor_codigo
       FROM articulos a
       LEFT JOIN stock s ON a.id = s.articulo_id
+      LEFT JOIN proveedores p ON a.proveedor_id = p.id
       WHERE a.id = ?
     `, [id]);
 
@@ -171,8 +278,11 @@ export const updateArticulo = async (req, res) => {
     });
 
   } catch (error) {
+    await connection.rollback();
     console.error('Error en updateArticulo:', error);
     res.status(500).json({ message: 'Error al actualizar artículo' });
+  } finally {
+    connection.release();
   }
 };
 
@@ -181,14 +291,12 @@ export const deleteArticulo = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar si el artículo existe
     const [existing] = await db.query('SELECT id FROM articulos WHERE id = ? AND activo = true', [id]);
     
     if (existing.length === 0) {
       return res.status(404).json({ message: 'Artículo no encontrado' });
     }
 
-    // Soft delete - marcar como inactivo
     await db.query('UPDATE articulos SET activo = false WHERE id = ?', [id]);
 
     res.json({ message: 'Artículo eliminado exitosamente' });
@@ -229,9 +337,17 @@ export const searchArticulos = async (req, res) => {
     const searchTerm = `%${q}%`;
 
     const [articulos] = await db.query(`
-      SELECT a.*, s.cantidad as stock_actual, s.stock_minimo, s.stock_maximo, s.ubicacion
+      SELECT 
+        a.*, 
+        s.cantidad as stock_actual, 
+        s.stock_minimo, 
+        s.stock_maximo, 
+        s.ubicacion,
+        p.nombre as proveedor_nombre,
+        p.codigo as proveedor_codigo
       FROM articulos a
       LEFT JOIN stock s ON a.id = s.articulo_id
+      LEFT JOIN proveedores p ON a.proveedor_id = p.id
       WHERE a.activo = true 
         AND (a.codigo LIKE ? OR a.nombre LIKE ? OR a.categoria LIKE ?)
       ORDER BY a.nombre

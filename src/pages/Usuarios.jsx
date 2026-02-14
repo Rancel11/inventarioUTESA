@@ -1,458 +1,341 @@
 import React, { useState, useEffect } from 'react';
-import './Usuarios.css';
-import axios from 'axios';
 import AdminLayout from '../components/AdminLayout';
+import api from '../../server/config/api';
+import './Usuarios.css';
+
+const ROLES = [
+  { value: 'admin',     label: 'Administrador', color: 'rol-admin',     desc: 'Acceso total al sistema' },
+  { value: 'encargado', label: 'Encargado',      color: 'rol-encargado', desc: 'Gestión de inventario y proveedores' },
+  { value: 'operador',  label: 'Operador',       color: 'rol-operador',  desc: 'Solo lectura y movimientos' },
+];
+
+const EMPTY_FORM = { nombre:'', email:'', password:'', rol:'operador' };
+
+const PERMISOS_POR_ROL = {
+  admin:     ['Artículos (completo)', 'Stock', 'Movimientos (completo)', 'Proveedores (completo)', 'Compras (completo)', 'Usuarios (completo)', 'Reportes', 'Configuración'],
+  encargado: ['Artículos (sin eliminar)', 'Stock', 'Movimientos', 'Ver Proveedores', 'Compras (crear/actualizar)', 'Reportes'],
+  operador:  ['Ver Artículos', 'Ver Stock', 'Registrar Movimientos', 'Ver Proveedores', 'Ver Compras'],
+};
 
 const Usuarios = () => {
-  const [usuarios, setUsuarios] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState('');
-  const [filtroRol, setFiltroRol] = useState('todos');
-  const [filtroEstado, setFiltroEstado] = useState('todos');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalEditar, setModalEditar] = useState(false);
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    email: '',
-    password: '',
-    rol: 'usuario',
-    activo: true
-  });
+  const [usuarios,   setUsuarios]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [showModal,  setShowModal]  = useState(false);
+  const [showPerms,  setShowPerms]  = useState(false);
+  const [editingUser,setEditingUser]= useState(null);
+  const [formData,   setFormData]   = useState(EMPTY_FORM);
+  const [selectedRol,setSelectedRol]= useState(null);
 
-  const API_URL = 'http://localhost:3000/api';
+  const meUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const permisos = meUser.permisos ?? [];
+  const can = (p) => permisos.includes(p);
 
-  useEffect(() => {
-    cargarUsuarios();
-  }, []);
+  useEffect(() => { fetchUsuarios(); }, []);
 
-  const cargarUsuarios = async () => {
+  const fetchUsuarios = async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/usuarios`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUsuarios(response.data);
-    } catch (error) {
-      console.error('Error al cargar usuarios:', error);
-    } finally {
-      setLoading(false);
-    }
+      const { data } = await api.get('/api/auth/usuarios');
+      setUsuarios(data);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
-  const usuariosFiltrados = usuarios.filter(usuario => {
-    const cumpleBusqueda = usuario.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-                          usuario.email.toLowerCase().includes(busqueda.toLowerCase());
-    const cumpleRol = filtroRol === 'todos' || usuario.rol === filtroRol;
-    const cumpleEstado = filtroEstado === 'todos' || 
-                        (filtroEstado === 'activos' && usuario.activo) ||
-                        (filtroEstado === 'inactivos' && !usuario.activo);
-    
-    return cumpleBusqueda && cumpleRol && cumpleEstado;
-  });
-
-  const estadisticas = {
-    total: usuarios.length,
-    activos: usuarios.filter(u => u.activo).length,
-    administradores: usuarios.filter(u => u.rol === 'admin').length,
-    usuarios: usuarios.filter(u => u.rol === 'usuario').length
-  };
-
-  const abrirModalCrear = () => {
-    setFormData({
-      nombre: '',
-      email: '',
-      password: '',
-      rol: 'usuario',
-      activo: true
-    });
-    setModalOpen(true);
-  };
-
-  const abrirModalEditar = (usuario) => {
-    setUsuarioSeleccionado(usuario);
-    setFormData({
-      nombre: usuario.nombre,
-      email: usuario.email,
-      password: '',
-      rol: usuario.rol,
-      activo: usuario.activo
-    });
-    setModalEditar(true);
-  };
-
-  const cerrarModales = () => {
-    setModalOpen(false);
-    setModalEditar(false);
-    setUsuarioSeleccionado(null);
-  };
+  const handleInputChange = (e) =>
+    setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      
-      if (modalEditar) {
-        // Editar usuario
-        const dataToSend = { ...formData };
-        if (!dataToSend.password) {
-          delete dataToSend.password;
-        }
-        
-        await axios.put(
-          `${API_URL}/usuarios/${usuarioSeleccionado.id}`,
-          dataToSend,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        alert('Usuario actualizado exitosamente');
+      if (editingUser) {
+        const { password, ...rest } = formData;
+        await api.put(`/api/auth/usuarios/${editingUser.id}`, rest);
       } else {
-        // Crear usuario
-        await axios.post(
-          `${API_URL}/usuarios`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        alert('Usuario creado exitosamente');
+        await api.post('/api/auth/register', formData);
       }
-      
-      cerrarModales();
-      cargarUsuarios();
+      closeModal();
+      fetchUsuarios();
     } catch (error) {
-      console.error('Error al guardar usuario:', error);
       alert(error.response?.data?.message || 'Error al guardar usuario');
     }
   };
 
-  const toggleEstadoUsuario = async (usuario) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        `${API_URL}/usuarios/${usuario.id}`,
-        { activo: !usuario.activo },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      cargarUsuarios();
-    } catch (error) {
-      console.error('Error al cambiar estado:', error);
-      alert('Error al cambiar el estado del usuario');
-    }
+  const handleEdit = (u) => {
+    setEditingUser(u);
+    setFormData({ nombre: u.nombre, email: u.email, password:'', rol: u.rol });
+    setShowModal(true);
   };
 
-  const eliminarUsuario = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este usuario?')) return;
-    
+  const handleToggleActivo = async (id, activo) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${API_URL}/usuarios/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      alert('Usuario eliminado exitosamente');
-      cargarUsuarios();
-    } catch (error) {
-      console.error('Error al eliminar usuario:', error);
-      alert('Error al eliminar usuario');
-    }
+      await api.put(`/api/auth/usuarios/${id}`, { activo: !activo });
+      fetchUsuarios();
+    } catch (e) { alert('Error al actualizar estado'); }
   };
 
-  if (loading) {
-    return (
-      <AdminLayout title="Gestión de Usuarios">
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Cargando usuarios...</p>
-        </div>
-      </AdminLayout>
-    );
-  }
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Desactivar este usuario?')) return;
+    try {
+      await api.delete(`/api/auth/usuarios/${id}`);
+      fetchUsuarios();
+    } catch (e) { alert('Error al eliminar usuario'); }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingUser(null);
+    setFormData(EMPTY_FORM);
+  };
+
+  const rolInfo = (val) => ROLES.find(r => r.value === val) || ROLES[2];
+
+  if (loading) return (
+    <div className="loading-container">
+      <div className="spinner"></div><p>Cargando usuarios...</p>
+    </div>
+  );
 
   return (
     <AdminLayout title="Gestión de Usuarios">
-      <div className="usuarios-content">
-        {/* Stats Row */}
-        <div className="stats-row">
-          <div className="stat-card blue">
-            <div className="stat-header">
-              <h3>Total Usuarios</h3>
-              <span className="stat-icon material-icons">people</span>
-            </div>
-            <div className="stat-body">
-              <p className="stat-number">{estadisticas.total}</p>
-            </div>
-            <div className="stat-footer">
-              <span className="stat-period">Registrados</span>
-            </div>
-          </div>
+      <div className="usuarios-page">
 
-          <div className="stat-card green">
-            <div className="stat-header">
-              <h3>Activos</h3>
-              <span className="stat-icon material-icons">check_circle</span>
-            </div>
-            <div className="stat-body">
-              <p className="stat-number">{estadisticas.activos}</p>
-            </div>
-            <div className="stat-footer">
-              <span className="stat-period">En sistema</span>
-            </div>
-          </div>
-
-          <div className="stat-card purple">
-            <div className="stat-header">
-              <h3>Administradores</h3>
-              <span className="stat-icon material-icons">admin_panel_settings</span>
-            </div>
-            <div className="stat-body">
-              <p className="stat-number">{estadisticas.administradores}</p>
-            </div>
-            <div className="stat-footer">
-              <span className="stat-period">Con permisos completos</span>
-            </div>
-          </div>
-
-          <div className="stat-card orange">
-            <div className="stat-header">
-              <h3>Usuarios</h3>
-              <span className="stat-icon material-icons">person</span>
-            </div>
-            <div className="stat-body">
-              <p className="stat-number">{estadisticas.usuarios}</p>
-            </div>
-            <div className="stat-footer">
-              <span className="stat-period">Permisos limitados</span>
-            </div>
+        <div className="page-header">
+          <p style={{ fontSize:16, color:'#6c757d', margin:0 }}>
+            Administra cuentas y roles de acceso al sistema
+          </p>
+          <div style={{ display:'flex', gap:10 }}>
+            <button className="btn btn-secondary" onClick={() => setShowPerms(true)}>
+              <span className="material-icons">security</span>Ver Permisos
+            </button>
+            {can('usuarios:create') && (
+              <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                <span className="material-icons">person_add</span>Nuevo Usuario
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Tabla de Usuarios */}
-        <div className="chart-card">
-          <div className="card-header">
-            <h3>Listado de Usuarios</h3>
-            <div className="header-actions">
-              <div className="search-box-usuarios">
-                <span className="material-icons">search</span>
-                <input
-                  type="text"
-                  placeholder="Buscar usuario..."
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                />
+        {/* ── Resumen de roles ── */}
+        <div className="roles-cards">
+          {ROLES.map((r) => {
+            const count = usuarios.filter(u => u.rol === r.value && u.activo).length;
+            return (
+              <div className={`rol-card ${r.color}`} key={r.value}>
+                <span className="material-icons rol-icon">
+                  {r.value === 'admin' ? 'admin_panel_settings' : r.value === 'encargado' ? 'manage_accounts' : 'person'}
+                </span>
+                <div>
+                  <h3>{count}</h3>
+                  <p>{r.label}{count !== 1 ? 'es' : ''}</p>
+                  <small>{r.desc}</small>
+                </div>
               </div>
-              <button className="btn-crear" onClick={abrirModalCrear}>
-                <span className="material-icons">add</span>
-                Nuevo Usuario
-              </button>
-            </div>
-          </div>
+            );
+          })}
+        </div>
 
-          <div className="filtros-usuarios">
-            <button 
-              className={`btn-filter ${filtroRol === 'todos' ? 'active' : ''}`}
-              onClick={() => setFiltroRol('todos')}
-            >
-              Todos
-            </button>
-            <button 
-              className={`btn-filter ${filtroRol === 'admin' ? 'active' : ''}`}
-              onClick={() => setFiltroRol('admin')}
-            >
-              Administradores
-            </button>
-            <button 
-              className={`btn-filter ${filtroRol === 'usuario' ? 'active' : ''}`}
-              onClick={() => setFiltroRol('usuario')}
-            >
-              Usuarios
-            </button>
-            <div className="divisor"></div>
-            <button 
-              className={`btn-filter ${filtroEstado === 'todos' ? 'active' : ''}`}
-              onClick={() => setFiltroEstado('todos')}
-            >
-              Todos los estados
-            </button>
-            <button 
-              className={`btn-filter ${filtroEstado === 'activos' ? 'active' : ''}`}
-              onClick={() => setFiltroEstado('activos')}
-            >
-              Activos
-            </button>
-            <button 
-              className={`btn-filter ${filtroEstado === 'inactivos' ? 'active' : ''}`}
-              onClick={() => setFiltroEstado('inactivos')}
-            >
-              Inactivos
-            </button>
-          </div>
-
-          <div className="card-body">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Usuario</th>
-                  <th>Email</th>
-                  <th>Rol</th>
-                  <th>Estado</th>
-                  <th>Fecha Registro</th>
-                  <th>Último Acceso</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuariosFiltrados.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-                      No hay usuarios que mostrar
-                    </td>
-                  </tr>
-                ) : (
-                  usuariosFiltrados.map(usuario => (
-                    <tr key={usuario.id}>
-                      <td>
-                        <div className="usuario-info">
-                          <div className="usuario-avatar">
-                            {usuario.nombre.charAt(0).toUpperCase()}
-                          </div>
-                          <strong>{usuario.nombre}</strong>
+        {/* ── Tabla ── */}
+        <div className="usuarios-table-container">
+          <table className="usuarios-table">
+            <thead>
+              <tr>
+                <th>Nombre</th><th>Email</th><th>Rol</th>
+                <th>Estado</th><th>Fecha Registro</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usuarios.length === 0 ? (
+                <tr><td colSpan="6">
+                  <div className="empty-state">
+                    <span className="material-icons">group</span>
+                    <p>No hay usuarios registrados</p>
+                  </div>
+                </td></tr>
+              ) : usuarios.map((u) => {
+                const info = rolInfo(u.rol);
+                const isMe = u.id === meUser.id;
+                return (
+                  <tr key={u.id} className={!u.activo ? 'row-inactivo' : ''}>
+                    <td>
+                      <div className="usuario-cell">
+                        <div className={`avatar-mini ${info.color}`}>
+                          {u.nombre.charAt(0).toUpperCase()}
                         </div>
-                      </td>
-                      <td>{usuario.email}</td>
-                      <td>
-                        <span className={`badge ${usuario.rol === 'admin' ? 'admin' : 'user'}`}>
-                          {usuario.rol === 'admin' ? 'Administrador' : 'Usuario'}
+                        <div>
+                          <strong>{u.nombre}</strong>
+                          {isMe && <span className="badge-yo">Tú</span>}
+                        </div>
+                      </div>
+                    </td>
+                    <td>{u.email}</td>
+                    <td>
+                      <span className={`rol-badge ${info.color}`}>{info.label}</span>
+                    </td>
+                    <td>
+                      {can('usuarios:update') && !isMe ? (
+                        <button
+                          className={`toggle-btn-status ${u.activo ? 'activo' : 'inactivo'}`}
+                          onClick={() => handleToggleActivo(u.id, u.activo)}
+                        >
+                          <span className="material-icons">
+                            {u.activo ? 'toggle_on' : 'toggle_off'}
+                          </span>
+                          {u.activo ? 'Activo' : 'Inactivo'}
+                        </button>
+                      ) : (
+                        <span className={`badge ${u.activo ? 'disponible' : 'sin-stock'}`}>
+                          {u.activo ? 'Activo' : 'Inactivo'}
                         </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${usuario.activo ? 'success' : 'danger'}`}>
-                          {usuario.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td>{usuario.fecha_registro ? new Date(usuario.fecha_registro).toLocaleDateString() : '-'}</td>
-                      <td>{usuario.ultimo_acceso ? new Date(usuario.ultimo_acceso).toLocaleDateString() : 'Nunca'}</td>
-                      <td>
-                        <div className="acciones-usuario">
-                          <button
-                            className="btn-icon edit"
-                            onClick={() => abrirModalEditar(usuario)}
-                            title="Editar"
-                          >
+                      )}
+                    </td>
+                    <td>
+                      {new Date(u.fecha_creacion).toLocaleDateString('es-ES',{
+                        day:'2-digit', month:'2-digit', year:'numeric'
+                      })}
+                    </td>
+                    <td>
+                      <div className="action-buttons">
+                        {can('usuarios:update') && (
+                          <button className="btn-icon" onClick={() => handleEdit(u)} title="Editar">
                             <span className="material-icons">edit</span>
                           </button>
-                          <button
-                            className="btn-icon toggle"
-                            onClick={() => toggleEstadoUsuario(usuario)}
-                            title={usuario.activo ? 'Desactivar' : 'Activar'}
-                          >
-                            <span className="material-icons">
-                              {usuario.activo ? 'toggle_on' : 'toggle_off'}
-                            </span>
+                        )}
+                        {can('usuarios:delete') && !isMe && (
+                          <button className="btn-icon btn-danger" onClick={() => handleDelete(u.id)} title="Desactivar">
+                            <span className="material-icons">person_off</span>
                           </button>
-                          <button
-                            className="btn-icon delete"
-                            onClick={() => eliminarUsuario(usuario.id)}
-                            title="Eliminar"
-                          >
-                            <span className="material-icons">delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      </div>
 
-      {/* Modal Crear/Editar */}
-      {(modalOpen || modalEditar) && (
-        <div className="modal-overlay" onClick={cerrarModales}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>
-                <span className="material-icons">
-                  {modalEditar ? 'edit' : 'person_add'}
-                </span>
-                {modalEditar ? 'Editar Usuario' : 'Nuevo Usuario'}
-              </h2>
-              <button className="modal-close" onClick={cerrarModales}>
-                <span className="material-icons">close</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit}>
+        {/* ════════════════════════════════════
+            MODAL: Crear / Editar Usuario
+            ════════════════════════════════════ */}
+        {showModal && (
+          <div className="modal-overlay" onClick={closeModal}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}</h2>
+                <button className="close-btn" onClick={closeModal}>
+                  <span className="material-icons">close</span>
+                </button>
+              </div>
               <div className="modal-body">
-                <div className="form-group">
-                  <label>Nombre Completo *</label>
-                  <input
-                    type="text"
-                    value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    required
-                    placeholder="Ej: Juan Pérez"
-                  />
-                </div>
+                <form onSubmit={handleSubmit} id="usuarioForm">
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Nombre *</label>
+                      <input type="text" name="nombre" value={formData.nombre}
+                        onChange={handleInputChange} required />
+                    </div>
+                    <div className="form-group">
+                      <label>Email *</label>
+                      <input type="email" name="email" value={formData.email}
+                        onChange={handleInputChange} required />
+                    </div>
+                    {!editingUser && (
+                      <div className="form-group">
+                        <label>Contraseña *</label>
+                        <input type="password" name="password" value={formData.password}
+                          onChange={handleInputChange} required={!editingUser} />
+                      </div>
+                    )}
+                    <div className="form-group">
+                      <label>Rol *</label>
+                      <select name="rol" value={formData.rol}
+                        onChange={handleInputChange} className="form-select">
+                        {ROLES.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label} — {r.desc}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                <div className="form-group">
-                  <label>Email *</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
-                    placeholder="correo@ejemplo.com"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Contraseña {modalEditar && '(dejar en blanco para no cambiar)'}</label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    required={!modalEditar}
-                    placeholder="********"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Rol *</label>
-                  <select
-                    value={formData.rol}
-                    onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
-                    required
-                  >
-                    <option value="usuario">Usuario</option>
-                    <option value="admin">Administrador</option>
-                  </select>
-                </div>
-
-                <div className="form-group-checkbox">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={formData.activo}
-                      onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
-                    />
-                    <span>Usuario activo</span>
-                  </label>
-                </div>
+                  {/* Preview de permisos del rol seleccionado */}
+                  <div className="perms-preview">
+                    <p className="perms-title">
+                      <span className="material-icons">check_circle</span>
+                      Permisos del rol seleccionado:
+                    </p>
+                    <div className="perms-list">
+                      {(PERMISOS_POR_ROL[formData.rol] || []).map((p) => (
+                        <span key={p} className="perm-chip">{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                </form>
               </div>
-
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={cerrarModales}>
-                  Cancelar
-                </button>
-                <button type="submit" className="btn-primary">
-                  <span className="material-icons">save</span>
-                  {modalEditar ? 'Guardar Cambios' : 'Crear Usuario'}
+                <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
+                <button type="submit" form="usuarioForm" className="btn btn-primary">
+                  {editingUser ? 'Actualizar' : 'Crear'} Usuario
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* ════════════════════════════════════
+            MODAL: Tabla de Permisos por Rol
+            ════════════════════════════════════ */}
+        {showPerms && (
+          <div className="modal-overlay" onClick={() => setShowPerms(false)}>
+            <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Tabla de Permisos por Rol</h2>
+                <button className="close-btn" onClick={() => setShowPerms(false)}>
+                  <span className="material-icons">close</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <table className="perms-table">
+                  <thead>
+                    <tr>
+                      <th>Módulo / Acción</th>
+                      <th className="col-admin">Administrador</th>
+                      <th className="col-encargado">Encargado</th>
+                      <th className="col-operador">Operador</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ['Ver Artículos',         true,  true,  true ],
+                      ['Crear Artículos',        true,  true,  false],
+                      ['Editar Artículos',       true,  true,  false],
+                      ['Eliminar Artículos',     true,  false, false],
+                      ['Ver Stock',              true,  true,  true ],
+                      ['Ver Movimientos',        true,  true,  true ],
+                      ['Registrar Movimientos',  true,  true,  true ],
+                      ['Ver Proveedores',        true,  true,  true ],
+                      ['Crear/Editar Proveedores',true, false, false],
+                      ['Eliminar Proveedores',   true,  false, false],
+                      ['Ver Compras',            true,  true,  true ],
+                      ['Crear Órdenes de Compra',true,  true,  false],
+                      ['Recibir/Cancelar Compras',true, true,  false],
+                      ['Ver Reportes',           true,  true,  false],
+                      ['Gestionar Usuarios',     true,  false, false],
+                      ['Configuración',          true,  false, false],
+                    ].map(([mod, a, e, o]) => (
+                      <tr key={mod}>
+                        <td>{mod}</td>
+                        <td className="center">{a ? '✅' : '❌'}</td>
+                        <td className="center">{e ? '✅' : '❌'}</td>
+                        <td className="center">{o ? '✅' : '❌'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
     </AdminLayout>
   );
 };

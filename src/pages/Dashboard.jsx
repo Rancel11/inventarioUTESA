@@ -1,387 +1,259 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../../server/config/api';
+import AdminLayout from '../components/AdminLayout';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [stats,       setStats]       = useState({ articulos:0, stock:0, movHoy:0, stockBajo:0 });
+  const [articulos,   setArticulos]   = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
+  const [categorias,  setCategorias]  = useState([]);
+  const [loading,     setLoading]     = useState(true);
 
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
+  useEffect(() => { cargarTodo(); }, []);
 
-  useEffect(() => {
-    // Verificar si hay usuario autenticado
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
+  const cargarTodo = async () => {
+    try {
+      const [resArts, resMov, resStock] = await Promise.all([
+        api.get('/api/articulos'),
+        api.get('/api/movimientos?limit=20'),
+        api.get('/api/stock/resumen'),
+      ]);
 
-    if (!token || !userData) {
-      navigate('/login');
-      return;
+      const arts = resArts.data;
+      const movs = resMov.data;
+      const resumen = resStock.data;
+
+      // ── Stats ────────────────────────────────
+      const hoy = new Date().toISOString().split('T')[0];
+      const movHoy = movs.filter(m =>
+        m.fecha_movimiento?.split('T')[0] === hoy
+      ).length;
+
+      setStats({
+        articulos: arts.length,
+        stock:     resumen.total_unidades ?? 0,
+        movHoy,
+        stockBajo: (resumen.bajo_stock ?? 0) + (resumen.criticos ?? 0),
+      });
+
+      // ── Últimos 5 artículos ───────────────────
+      setArticulos(arts.slice(0, 5));
+
+      // ── Últimos 6 movimientos ─────────────────
+      setMovimientos(movs.slice(0, 6));
+
+      // ── Artículos por categoría ───────────────
+      const catMap = {};
+      arts.forEach(a => {
+        catMap[a.categoria] = (catMap[a.categoria] || 0) + 1;
+      });
+      const total = arts.length || 1;
+      const sorted = Object.entries(catMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([cat, count]) => ({
+          cat, count,
+          pct: Math.round((count / total) * 100),
+        }));
+      setCategorias(sorted);
+
+    } catch (e) {
+      console.error('Error al cargar dashboard:', e);
+    } finally {
+      setLoading(false);
     }
-
-    setUser(JSON.parse(userData));
-    setLoading(false);
-  }, [navigate]);
-
-  useEffect(() => {
-    // Cerrar dropdown al hacer click fuera
-    const handleClickOutside = (event) => {
-      if (dropdownOpen && !event.target.closest('.dropdown')) {
-        setDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [dropdownOpen]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
   };
 
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
+  // ── Helpers ──────────────────────────────────
+  const fmtRelativo = (fecha) => {
+    if (!fecha) return '';
+    const diff = Math.floor((Date.now() - new Date(fecha)) / 60000);
+    if (diff <  1) return 'Ahora mismo';
+    if (diff < 60) return `Hace ${diff}m`;
+    const h = Math.floor(diff / 60);
+    if (h   < 24) return `Hace ${h}h`;
+    return `Hace ${Math.floor(h / 24)}d`;
   };
 
-  const toggleDropdown = () => {
-    setDropdownOpen(!dropdownOpen);
+  const stockStatus = (art) => {
+    const s = art.stock_actual ?? 0;
+    const m = art.stock_minimo ?? 0;
+    if (s <= 0)       return { cls:'danger',  label:'Sin Stock'  };
+    if (s <= m)       return { cls:'warning', label:'Stock Bajo' };
+    return                   { cls:'success', label:'Disponible' };
   };
 
-  if (loading) {
-    return (
+  const CAT_COLORS = ['#468189','#77ACA2','#9DBEBB','#F4A261','#E76F51','#264653'];
+
+  // Generar segmentos para el donut SVG
+  const buildDonut = (cats) => {
+    let offset = 0;
+    const r = 15.915; // radio para circunferencia 100
+    return cats.map((c, i) => {
+      const dash = c.pct;
+      const seg = { pct: c.pct, dash, offset, color: CAT_COLORS[i] };
+      offset += dash;
+      return seg;
+    });
+  };
+
+  if (loading) return (
+    <AdminLayout title="Dashboard">
       <div className="dashboard-loading">
         <div className="spinner"></div>
-        <p>Cargando...</p>
+        <p>Cargando datos...</p>
       </div>
-    );
-  }
+    </AdminLayout>
+  );
+
+  const donutSegs = buildDonut(categorias);
 
   return (
-    <div className="admin-container">
-      {/* Sidebar */}
-      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="sidebar-header">
-          <div className="logo">
-            <span className="material-icons logo-icon">inventory_2</span>
-            {!sidebarCollapsed && <span className="logo-text">Inventario</span>}
-          </div>
-          <button className="toggle-btn" onClick={toggleSidebar}>
-            <span className="material-icons">{sidebarCollapsed ? 'menu' : 'close'}</span>
-          </button>
+    <AdminLayout title="Dashboard Overview">
+      <div className="dashboard-content">
+
+        {/* ══ STATS ══════════════════════════════════ */}
+        <div className="stats-row">
+          {[
+            { color:'blue',   icon:'inventory',   label:'Total Artículos',  val: stats.articulos.toLocaleString(), sub:'En catálogo' },
+            { color:'green',  icon:'warehouse',   label:'Stock Total',      val: stats.stock.toLocaleString(),     sub:'Unidades en almacén' },
+            { color:'orange', icon:'swap_horiz',  label:'Movimientos Hoy',  val: stats.movHoy,                     sub:'Entradas y salidas' },
+            { color:'red',    icon:'warning',     label:'Alertas Stock',    val: stats.stockBajo,                  sub:'Bajo mínimo' },
+          ].map(({ color, icon, label, val, sub }) => (
+            <div key={label} className={`stat-card ${color}`}>
+              <div className="stat-header">
+                <h3>{label}</h3>
+                <span className={`material-icons stat-icon`}>{icon}</span>
+              </div>
+              <div className="stat-body">
+                <h2 className="stat-number">{val}</h2>
+              </div>
+              <div className="stat-footer">
+                <span className="stat-period">{sub}</span>
+              </div>
+            </div>
+          ))}
         </div>
 
-        <nav className="sidebar-nav">
-          <ul>
-            <li className={isActive('/dashboard') ? 'active' : ''}>
-              <Link to="/dashboard">
-                <span className="material-icons icon">dashboard</span>
-                {!sidebarCollapsed && <span>Dashboard</span>}
-              </Link>
-            </li>
-            <li className={isActive('/articulos') ? 'active' : ''}>
-              <Link to="/articulos">
-                <span className="material-icons icon">inventory</span>
-                {!sidebarCollapsed && <span>Artículos</span>}
-              </Link>
-            </li>
-            <li className={isActive('/stock') ? 'active' : ''}>
-              <Link to="/stock">
-                <span className="material-icons icon">warehouse</span>
-                {!sidebarCollapsed && <span>Stock</span>}
-              </Link>
-            </li>
-            <li className={isActive('/movimientos') ? 'active' : ''}>
-              <Link to="/movimientos">
-                <span className="material-icons icon">swap_horiz</span>
-                {!sidebarCollapsed && <span>Movimientos</span>}
-              </Link>
-            </li>
-            <li className={isActive('/reportes') ? 'active' : ''}>
-              <Link to="/reportes">
-                <span className="material-icons icon">bar_chart</span>
-                {!sidebarCollapsed && <span>Reportes</span>}
-              </Link>
-            </li>
-            <li className={isActive('/usuarios') ? 'active' : ''}>
-              <Link to="/usuarios">
-                <span className="material-icons icon">people</span>
-                {!sidebarCollapsed && <span>Usuarios</span>}
-              </Link>
-            </li>
-          </ul>
+        {/* ══ CHARTS ROW ═════════════════════════════ */}
+        <div className="charts-row">
 
-          <div className="sidebar-footer">
-            <ul>
-              <li className={isActive('/configuracion') ? 'active' : ''}>
-                <Link to="/configuracion">
-                  <span className="material-icons icon">settings</span>
-                  {!sidebarCollapsed && <span>Configuración</span>}
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <div className="main-content">
-        {/* Top Navbar */}
-        <header className="top-navbar">
-          <div className="navbar-left">
-            <h1 className="page-title">Dashboard Overview</h1>
-          </div>
-          <div className="navbar-right">
-            <div className="search-box">
-              <input type="text" placeholder="Buscar..." />
-              <span className="material-icons search-icon">search</span>
+          {/* Actividad Reciente */}
+          <div className="chart-card large">
+            <div className="card-header">
+              <h3>Actividad Reciente</h3>
+              <Link to="/movimientos" className="view-all">
+                Ver todos <span className="material-icons">arrow_forward</span>
+              </Link>
             </div>
-            <button className="notification-btn">
-              <span className="material-icons">notifications</span>
-              <span className="badge">3</span>
-            </button>
-            <div className="user-menu">
-              <div className="user-avatar">
-                <span>{user?.nombre?.charAt(0).toUpperCase()}</span>
-              </div>
-              <div className="user-info">
-                <span className="user-name">{user?.nombre}</span>
-                <span className="user-role">{user?.rol === 'admin' ? 'Administrador' : 'Usuario'}</span>
-              </div>
-              <div className="dropdown">
-                <button className="dropdown-toggle" onClick={toggleDropdown}>
-                  <span className="material-icons">
-                    {dropdownOpen ? 'expand_less' : 'expand_more'}
-                  </span>
-                </button>
-                {dropdownOpen && (
-                  <div className="dropdown-menu">
-                    <a href="#" onClick={() => setDropdownOpen(false)}>
-                      <span className="material-icons">account_circle</span>
-                      Mi Perfil
-                    </a>
-                    <a href="#" onClick={() => setDropdownOpen(false)}>
-                      <span className="material-icons">settings</span>
-                      Configuración
-                    </a>
-                    <a href="#" onClick={handleLogout}>
-                      <span className="material-icons">logout</span>
-                      Cerrar Sesión
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Dashboard Content */}
-        <div className="dashboard-content">
-          {/* Stats Cards */}
-          <div className="stats-row">
-            <div className="stat-card blue">
-              <div className="stat-header">
-                <h3>Total Artículos</h3>
-                <span className="material-icons stat-icon">inventory</span>
-              </div>
-              <div className="stat-body">
-                <h2 className="stat-number">2,390</h2>
-                <div className="stat-footer">
-                  <span className="stat-change positive">
-                    <span className="material-icons">trending_up</span>
-                    12.5%
-                  </span>
-                  <span className="stat-period">vs último mes</span>
+            <div className="card-body">
+              {movimientos.length === 0 ? (
+                <div className="empty-dash">
+                  <span className="material-icons">inbox</span>
+                  <p>Sin movimientos registrados</p>
                 </div>
-              </div>
-              <div className="stat-chart">
-                <svg viewBox="0 0 100 30" className="mini-chart">
-                  <polyline points="0,25 20,20 40,22 60,15 80,18 100,10" fill="none" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </div>
-            </div>
-
-            <div className="stat-card green">
-              <div className="stat-header">
-                <h3>Stock Total</h3>
-                <span className="material-icons stat-icon">warehouse</span>
-              </div>
-              <div className="stat-body">
-                <h2 className="stat-number">8,147</h2>
-                <div className="stat-footer">
-                  <span className="stat-change positive">
-                    <span className="material-icons">trending_up</span>
-                    8.3%
-                  </span>
-                  <span className="stat-period">vs último mes</span>
+              ) : (
+                <div className="activity-list">
+                  {movimientos.map(m => (
+                    <div key={m.id} className="activity-item">
+                      <div className={`activity-icon ${
+                        m.tipo_movimiento === 'entrada' ? 'green' :
+                        m.tipo_movimiento === 'salida'  ? 'red'   : 'blue'
+                      }`}>
+                        <span className="material-icons">
+                          {m.tipo_movimiento === 'entrada' ? 'add'    :
+                           m.tipo_movimiento === 'salida'  ? 'remove' : 'tune'}
+                        </span>
+                      </div>
+                      <div className="activity-content">
+                        <p>
+                          <strong style={{ textTransform:'capitalize' }}>
+                            {m.tipo_movimiento}
+                          </strong>
+                          {' · '}
+                          <span style={{ color:'#6c757d' }}>{m.articulo_nombre}</span>
+                        </p>
+                        <span>
+                          {m.tipo_movimiento === 'entrada' ? '+' : '-'}{m.cantidad} uds
+                          {m.usuario_nombre && ` · ${m.usuario_nombre}`}
+                        </span>
+                        <span className="time">{fmtRelativo(m.fecha_movimiento)}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div className="stat-chart">
-                <svg viewBox="0 0 100 30" className="mini-chart">
-                  <polyline points="0,20 20,18 40,22 60,19 80,15 100,12" fill="none" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </div>
-            </div>
-
-            <div className="stat-card orange">
-              <div className="stat-header">
-                <h3>Movimientos Hoy</h3>
-                <span className="material-icons stat-icon">swap_horiz</span>
-              </div>
-              <div className="stat-body">
-                <h2 className="stat-number">182</h2>
-                <div className="stat-footer">
-                  <span className="stat-change negative">
-                    <span className="material-icons">trending_down</span>
-                    4.2%
-                  </span>
-                  <span className="stat-period">vs ayer</span>
-                </div>
-              </div>
-              <div className="stat-chart">
-                <svg viewBox="0 0 100 30" className="mini-chart">
-                  <polyline points="0,15 20,18 40,16 60,20 80,17 100,22" fill="none" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </div>
-            </div>
-
-            <div className="stat-card red">
-              <div className="stat-header">
-                <h3>Stock Bajo</h3>
-                <span className="material-icons stat-icon">warning</span>
-              </div>
-              <div className="stat-body">
-                <h2 className="stat-number">29</h2>
-                <div className="stat-footer">
-                  <span className="stat-change positive">
-                    <span className="material-icons">trending_down</span>
-                    2.1%
-                  </span>
-                  <span className="stat-period">vs semana pasada</span>
-                </div>
-              </div>
-              <div className="stat-chart">
-                <svg viewBox="0 0 100 30" className="mini-chart">
-                  <polyline points="0,18 20,20 40,17 60,19 80,16 100,15" fill="none" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Charts Row */}
-          <div className="charts-row">
-            <div className="chart-card large">
-              <div className="card-header">
-                <h3>Movimientos del Mes</h3>
-                <div className="card-actions">
-                  <button className="btn-filter active">Mes Actual</button>
-                  <button className="btn-filter">Mes Anterior</button>
-                </div>
-              </div>
-              <div className="card-body">
-                <div className="chart-placeholder">
-                  <svg viewBox="0 0 600 300" className="line-chart">
-                    {/* Grid lines */}
-                    <line x1="50" y1="50" x2="550" y2="50" stroke="#e0e0e0" strokeWidth="1"/>
-                    <line x1="50" y1="100" x2="550" y2="100" stroke="#e0e0e0" strokeWidth="1"/>
-                    <line x1="50" y1="150" x2="550" y2="150" stroke="#e0e0e0" strokeWidth="1"/>
-                    <line x1="50" y1="200" x2="550" y2="200" stroke="#e0e0e0" strokeWidth="1"/>
-                    <line x1="50" y1="250" x2="550" y2="250" stroke="#e0e0e0" strokeWidth="1"/>
-                    
-                    {/* Chart line */}
-                    <polyline 
-                      points="50,200 100,180 150,190 200,150 250,170 300,140 350,160 400,130 450,150 500,120 550,140" 
-                      fill="none" 
-                      stroke="#468189" 
-                      strokeWidth="3"
-                    />
-                    
-                    {/* Area fill */}
-                    <polygon 
-                      points="50,200 100,180 150,190 200,150 250,170 300,140 350,160 400,130 450,150 500,120 550,140 550,250 50,250" 
-                      fill="url(#gradient)"
-                      opacity="0.3"
-                    />
-                    
-                    <defs>
-                      <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#468189" stopOpacity="0.5" />
-                        <stop offset="100%" stopColor="#468189" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
-                <div className="chart-legend">
-                  <div className="legend-item">
-                    <span className="legend-color" style={{backgroundColor: '#468189'}}></span>
-                    <span>Entradas</span>
-                  </div>
-                  <div className="legend-item">
-                    <span className="legend-color" style={{backgroundColor: '#77ACA2'}}></span>
-                    <span>Salidas</span>
-                  </div>
-                </div>
-              </div>
+          {/* Artículos por Categoría */}
+          <div className="chart-card small">
+            <div className="card-header">
+              <h3>Por Categoría</h3>
             </div>
+            <div className="card-body">
+              {categorias.length === 0 ? (
+                <div className="empty-dash">
+                  <span className="material-icons">category</span>
+                  <p>Sin categorías</p>
+                </div>
+              ) : (
+                <>
+                  {/* Mini donut SVG */}
+                  <div className="donut-wrap">
+                    <svg viewBox="0 0 36 36" className="donut-svg">
+                      {donutSegs.map((s, i) => (
+                        <circle key={i}
+                          cx="18" cy="18" r="15.91549430918954"
+                          fill="transparent"
+                          stroke={s.color}
+                          strokeWidth="4"
+                          strokeDasharray={`${s.dash} ${100 - s.dash}`}
+                          strokeDashoffset={`${25 - s.offset}`}
+                        />
+                      ))}
+                      <text x="18" y="20.5" textAnchor="middle"
+                        fontSize="6" fontWeight="bold" fill="#2c3e50">
+                        {categorias.length}
+                      </text>
+                    </svg>
+                  </div>
 
-            <div className="chart-card small">
-              <div className="card-header">
-                <h3>Artículos por Categoría</h3>
-              </div>
-              <div className="card-body">
-                <div className="pie-chart-placeholder">
-                  <svg viewBox="0 0 200 200" className="pie-chart">
-                    <circle cx="100" cy="100" r="80" fill="#468189" />
-                    <circle cx="100" cy="100" r="80" fill="#77ACA2" 
-                      strokeDasharray="251 251" 
-                      strokeDashoffset="125" 
-                      transform="rotate(-90 100 100)"
-                      style={{stroke: '#77ACA2', strokeWidth: 80, fill: 'none'}}
-                    />
-                    <circle cx="100" cy="100" r="80" fill="#9DBEBB" 
-                      strokeDasharray="251 251" 
-                      strokeDashoffset="188" 
-                      transform="rotate(-90 100 100)"
-                      style={{stroke: '#9DBEBB', strokeWidth: 80, fill: 'none'}}
-                    />
-                  </svg>
-                </div>
-                <div className="pie-legend">
-                  <div className="legend-item">
-                    <span className="legend-color" style={{backgroundColor: '#468189'}}></span>
-                    <span>Tecnología (45%)</span>
+                  <div className="cat-legend">
+                    {categorias.map((c, i) => (
+                      <div key={c.cat} className="cat-row">
+                        <span className="cat-dot" style={{ background: CAT_COLORS[i] }}/>
+                        <span className="cat-name">{c.cat}</span>
+                        <span className="cat-pct">{c.pct}%</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="legend-item">
-                    <span className="legend-color" style={{backgroundColor: '#77ACA2'}}></span>
-                    <span>Oficina (30%)</span>
-                  </div>
-                  <div className="legend-item">
-                    <span className="legend-color" style={{backgroundColor: '#9DBEBB'}}></span>
-                    <span>Otros (25%)</span>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Tables Row */}
-          <div className="tables-row">
-            <div className="table-card">
-              <div className="card-header">
-                <h3>Artículos Recientes</h3>
-                <a href="#" className="view-all">
-                  Ver todos
-                  <span className="material-icons">arrow_forward</span>
-                </a>
-              </div>
-              <div className="card-body">
+        {/* ══ TABLES ROW ═════════════════════════════ */}
+        <div className="tables-row">
+
+          {/* Artículos recientes */}
+          <div className="table-card">
+            <div className="card-header">
+              <h3>Artículos en Inventario</h3>
+              <Link to="/articulos" className="view-all">
+                Ver todos <span className="material-icons">arrow_forward</span>
+              </Link>
+            </div>
+            <div className="card-body">
+              {articulos.length === 0 ? (
+                <div className="empty-dash">
+                  <span className="material-icons">inventory_2</span>
+                  <p>No hay artículos registrados</p>
+                </div>
+              ) : (
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -393,89 +265,78 @@ const Dashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>#ART001</td>
-                      <td>Laptop Dell XPS 15</td>
-                      <td>Tecnología</td>
-                      <td>10</td>
-                      <td><span className="badge success">Disponible</span></td>
-                    </tr>
-                    <tr>
-                      <td>#ART002</td>
-                      <td>Mouse Logitech MX</td>
-                      <td>Tecnología</td>
-                      <td>25</td>
-                      <td><span className="badge success">Disponible</span></td>
-                    </tr>
-                    <tr>
-                      <td>#ART003</td>
-                      <td>Teclado Mecánico RGB</td>
-                      <td>Tecnología</td>
-                      <td>5</td>
-                      <td><span className="badge warning">Stock Bajo</span></td>
-                    </tr>
+                    {articulos.map(art => {
+                      const st = stockStatus(art);
+                      return (
+                        <tr key={art.id}>
+                          <td><strong>{art.codigo}</strong></td>
+                          <td>{art.nombre}</td>
+                          <td>
+                            <span style={{
+                              background:'#e8ecfd', color:'#4361ee',
+                              padding:'2px 8px', borderRadius:12,
+                              fontSize:12, fontWeight:500,
+                            }}>{art.categoria}</span>
+                          </td>
+                          <td style={{ textAlign:'center' }}><strong>{art.stock_actual ?? 0}</strong></td>
+                          <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
-              </div>
+              )}
             </div>
+          </div>
 
-            <div className="table-card">
-              <div className="card-header">
-                <h3>Actividad Reciente</h3>
-                <a href="#" className="view-all">
-                  Ver todos
-                  <span className="material-icons">arrow_forward</span>
-                </a>
-              </div>
-              <div className="card-body">
-                <div className="activity-list">
-                  <div className="activity-item">
-                    <div className="activity-icon green">
-                      <span className="material-icons">add</span>
-                    </div>
-                    <div className="activity-content">
-                      <p><strong>Entrada de stock</strong></p>
-                      <span>20 unidades de Laptop Dell XPS 15</span>
-                      <span className="time">Hace 2 horas</span>
-                    </div>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-icon red">
-                      <span className="material-icons">remove</span>
-                    </div>
-                    <div className="activity-content">
-                      <p><strong>Salida de stock</strong></p>
-                      <span>5 unidades de Mouse Logitech</span>
-                      <span className="time">Hace 4 horas</span>
-                    </div>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-icon blue">
-                      <span className="material-icons">edit</span>
-                    </div>
-                    <div className="activity-content">
-                      <p><strong>Nuevo artículo</strong></p>
-                      <span>Teclado Mecánico RGB agregado</span>
-                      <span className="time">Hace 6 horas</span>
-                    </div>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-icon orange">
-                      <span className="material-icons">warning</span>
-                    </div>
-                    <div className="activity-content">
-                      <p><strong>Alerta de stock</strong></p>
-                      <span>Teclado Mecánico RGB bajo mínimo</span>
-                      <span className="time">Hace 8 horas</span>
-                    </div>
-                  </div>
+          {/* Alertas de stock */}
+          <div className="table-card">
+            <div className="card-header">
+              <h3>Alertas de Stock</h3>
+              <Link to="/stock" className="view-all">
+                Ver stock <span className="material-icons">arrow_forward</span>
+              </Link>
+            </div>
+            <div className="card-body">
+              {stats.stockBajo === 0 ? (
+                <div className="empty-dash ok">
+                  <span className="material-icons">check_circle</span>
+                  <p>¡Todo el stock en niveles correctos!</p>
                 </div>
-              </div>
+              ) : (
+                <div className="activity-list">
+                  {articulos
+                    .filter(a => (a.stock_actual ?? 0) <= (a.stock_minimo ?? 0))
+                    .slice(0, 5)
+                    .map(art => {
+                      const critico = (art.stock_actual ?? 0) === 0 ||
+                        (art.stock_actual ?? 0) <= (art.stock_minimo ?? 0) * 0.25;
+                      return (
+                        <div key={art.id} className="activity-item">
+                          <div className={`activity-icon ${critico ? 'red' : 'orange'}`}>
+                            <span className="material-icons">
+                              {critico ? 'error' : 'warning'}
+                            </span>
+                          </div>
+                          <div className="activity-content">
+                            <p><strong>{art.nombre}</strong></p>
+                            <span>
+                              Stock: {art.stock_actual ?? 0}
+                              {art.stock_minimo ? ` / Mín: ${art.stock_minimo}` : ''}
+                            </span>
+                            <span>{art.categoria}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
         </div>
+
       </div>
-    </div>
+    </AdminLayout>
   );
 };
 
