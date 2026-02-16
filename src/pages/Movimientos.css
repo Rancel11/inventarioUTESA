@@ -1,0 +1,249 @@
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+/* ========================================
+   MOVIMIENTOS PAGE
+   ======================================== */
+
+.movimientos-page {
+  min-height: calc(100vh - 200px);
+}
+
+/* ========================================
+   FILTER BUTTONS
+   ======================================== */
+
+.filter-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 2px solid #e0e0e0;
+  background: white;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: var(--color-text);
+}
+
+.filter-btn .material-icons {
+  font-size: 20px;
+}
+
+.filter-btn:hover {
+  border-color: var(--color-secondary);
+  background: #f8f9fa;
+}
+
+.filter-btn.active {
+  background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-accent) 100%);
+  color: white;
+  border-color: var(--color-secondary);
+}
+
+/* ========================================
+   MOVIMIENTOS TABLE
+   ======================================== */
+
+.movimientos-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.movimientos-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.movimientos-table thead {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: white;
+}
+
+.movimientos-table th {
+  padding: 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.movimientos-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.movimientos-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.movimientos-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+/* ========================================
+   TIPO BADGE
+   ======================================== */
+
+.tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.tipo-badge .material-icons {
+  font-size: 18px;
+}
+
+.tipo-entrada {
+  background: #d4edda;
+  color: #155724;
+}
+
+.tipo-salida {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.tipo-ajuste {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+/* ========================================
+   ARTICULO INFO
+   ======================================== */
+
+.articulo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.articulo-info strong {
+  color: var(--color-primary);
+  font-size: 13px;
+}
+
+.articulo-info span {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+/* ========================================
+   CANTIDAD BADGE
+   ======================================== */
+
+.cantidad-badge {
+  display: inline-block;
+  background: var(--color-secondary);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ========================================
+   FECHA COLUMN
+   ======================================== */
+
+.fecha-col {
+  color: #6c757d;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ========================================
+   HELP TEXT
+   ======================================== */
+
+.help-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+  .filter-buttons {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .filter-btn {
+    flex-shrink: 0;
+  }
+
+  .movimientos-table {
+    font-size: 12px;
+  }
+
+  .movimientos-table th,
+  .movimientos-table td {
+    padding: 12px 8px;
+  }
+
+  .tipo-badge {
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 6px;
+  }
+
+  .tipo-badge span {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .movimientos-table thead {
+    display: none;
+  }
+
+  .movimientos-table tbody tr {
+    display: block;
+    margin-bottom: 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .movimientos-table td {
+    display: block;
+    text-align: left;
+    padding: 8px 0;
+    border: none;
+  }
+
+  .movimientos-table td:before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-primary);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+}
