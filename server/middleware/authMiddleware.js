@@ -14,6 +14,7 @@ export const PERMISSIONS = {
     'usuarios:read', 'usuarios:create', 'usuarios:update', 'usuarios:delete',
     'reportes:read',
     'configuracion:read', 'configuracion:update',
+    'solicitudes:read', 'solicitudes:create', 'solicitudes:update',
   ],
   encargado: [
     'articulos:read', 'articulos:create', 'articulos:update',
@@ -22,6 +23,7 @@ export const PERMISSIONS = {
     'proveedores:read',
     'compras:read', 'compras:create', 'compras:update',
     'reportes:read',
+    'solicitudes:read', 'solicitudes:update',
   ],
   operador: [
     'articulos:read',
@@ -29,6 +31,11 @@ export const PERMISSIONS = {
     'movimientos:read', 'movimientos:create',
     'proveedores:read',
     'compras:read',
+    'solicitudes:read', 'solicitudes:update',
+  ],
+  solicitante: [
+    'articulos:read',
+    'solicitudes:read', 'solicitudes:create',
   ],
 };
 
@@ -69,17 +76,18 @@ export const authMiddleware = async (req, res, next) => {
   }
 };
 
+// alias para importar como protect
+export const protect = authMiddleware;
+
 // ─────────────────────────────────────────────────
 // optionalAuth — adjunta usuario si hay token,
 // pero NO falla si el token está ausente.
-// Útil para el endpoint /register en modo setup inicial.
 // ─────────────────────────────────────────────────
 export const optionalAuth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
     if (!token) {
-      // Sin token: continuar sin usuario adjunto
       req.userId  = null;
       req.userRol = null;
       req.user    = null;
@@ -101,7 +109,6 @@ export const optionalAuth = async (req, res, next) => {
 
     next();
   } catch {
-    // Token inválido — tratar como sin autenticación
     req.userId  = null;
     req.userRol = null;
     req.user    = null;
@@ -111,7 +118,6 @@ export const optionalAuth = async (req, res, next) => {
 
 // ─────────────────────────────────────────────────
 // requirePermission — verifica un permiso específico
-// Uso: requirePermission('articulos:delete')
 // ─────────────────────────────────────────────────
 export const requirePermission = (permission) => (req, res, next) => {
   const rol = req.userRol;

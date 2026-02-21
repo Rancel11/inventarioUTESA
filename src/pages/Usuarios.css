@@ -227,3 +227,41 @@
   .usuarios-table th, .usuarios-table td { padding: 10px 8px; }
   .modal-lg { max-width: 100% !important; border-radius: 0; }
 }
+/* ════════════════════════════════════════════════════
+   Agregar al final de tu Usuarios.css existente
+   ════════════════════════════════════════════════════ */
+
+/* ── Rol Solicitante ── */
+.rol-solicitante {
+  background: #fdf4ff;
+  border-color: #c77dff;
+}
+
+.avatar-mini.rol-solicitante {
+  background: linear-gradient(135deg, #c77dff, #9d4edd);
+}
+
+.rol-badge.rol-solicitante {
+  background: #f3d9fa;
+  color: #7b2d8b;
+  border: 1px solid #e0a8f0;
+}
+
+.rol-card.rol-solicitante {
+  border-left-color: #c77dff;
+}
+
+.rol-card.rol-solicitante .material-icons.rol-icon {
+  color: #9d4edd;
+}
+
+.rol-card.rol-solicitante h3 {
+  color: #9d4edd;
+}
+
+/* ── Columna solicitante en tabla de permisos ── */
+.col-solicitante {
+  background: #fdf4ff;
+  color: #7b2d8b;
+  font-weight: 600;
+}

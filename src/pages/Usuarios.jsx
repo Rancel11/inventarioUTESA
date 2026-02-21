@@ -4,31 +4,32 @@ import api from '../../server/config/api';
 import './Usuarios.css';
 
 const ROLES = [
-  { value: 'admin',     label: 'Administrador', color: 'rol-admin',     desc: 'Acceso total al sistema' },
-  { value: 'encargado', label: 'Encargado',      color: 'rol-encargado', desc: 'Gestión de inventario y proveedores' },
-  { value: 'operador',  label: 'Operador',       color: 'rol-operador',  desc: 'Solo lectura y movimientos' },
+  { value: 'admin',       label: 'Administrador', color: 'rol-admin',       desc: 'Acceso total al sistema',              icon: 'admin_panel_settings' },
+  { value: 'encargado',   label: 'Encargado',      color: 'rol-encargado',   desc: 'Gestión de inventario y proveedores',  icon: 'manage_accounts'      },
+  { value: 'operador',    label: 'Operador',       color: 'rol-operador',    desc: 'Solo lectura y movimientos',           icon: 'person'               },
+  { value: 'solicitante', label: 'Solicitante',    color: 'rol-solicitante', desc: 'Crear y seguir sus solicitudes',       icon: 'assignment_ind'       },
 ];
 
-const EMPTY_FORM = { nombre:'', email:'', password:'', rol:'operador' };
+const EMPTY_FORM = { nombre: '', email: '', password: '', rol: 'operador' };
 
 const PERMISOS_POR_ROL = {
-  admin:     ['Artículos (completo)', 'Stock', 'Movimientos (completo)', 'Proveedores (completo)', 'Compras (completo)', 'Usuarios (completo)', 'Reportes', 'Configuración'],
-  encargado: ['Artículos (sin eliminar)', 'Stock', 'Movimientos', 'Ver Proveedores', 'Compras (crear/actualizar)', 'Reportes'],
-  operador:  ['Ver Artículos', 'Ver Stock', 'Registrar Movimientos', 'Ver Proveedores', 'Ver Compras'],
+  admin:       ['Artículos (completo)', 'Stock', 'Movimientos (completo)', 'Proveedores (completo)', 'Compras (completo)', 'Usuarios (completo)', 'Reportes', 'Configuración', 'Solicitudes (gestión completa)'],
+  encargado:   ['Artículos (sin eliminar)', 'Stock', 'Movimientos', 'Ver Proveedores', 'Compras (crear/actualizar)', 'Reportes', 'Ver y gestionar Solicitudes'],
+  operador:    ['Ver Artículos', 'Ver Stock', 'Registrar Movimientos', 'Ver Proveedores', 'Ver Compras', 'Completar Solicitudes aprobadas'],
+  solicitante: ['Ver Artículos', 'Crear Solicitudes', 'Ver sus propias Solicitudes'],
 };
 
 const Usuarios = () => {
-  const [usuarios,   setUsuarios]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [showModal,  setShowModal]  = useState(false);
-  const [showPerms,  setShowPerms]  = useState(false);
-  const [editingUser,setEditingUser]= useState(null);
-  const [formData,   setFormData]   = useState(EMPTY_FORM);
-  const [selectedRol,setSelectedRol]= useState(null);
+  const [usuarios,    setUsuarios]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showModal,   setShowModal]   = useState(false);
+  const [showPerms,   setShowPerms]   = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [formData,    setFormData]    = useState(EMPTY_FORM);
 
-  const meUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const meUser   = JSON.parse(localStorage.getItem('user') || '{}');
   const permisos = meUser.permisos ?? [];
-  const can = (p) => permisos.includes(p);
+  const can      = (p) => permisos.includes(p);
 
   useEffect(() => { fetchUsuarios(); }, []);
 
@@ -61,7 +62,7 @@ const Usuarios = () => {
 
   const handleEdit = (u) => {
     setEditingUser(u);
-    setFormData({ nombre: u.nombre, email: u.email, password:'', rol: u.rol });
+    setFormData({ nombre: u.nombre, email: u.email, password: '', rol: u.rol });
     setShowModal(true);
   };
 
@@ -99,10 +100,10 @@ const Usuarios = () => {
       <div className="usuarios-page">
 
         <div className="page-header">
-          <p style={{ fontSize:16, color:'#6c757d', margin:0 }}>
+          <p style={{ fontSize: 16, color: '#6c757d', margin: 0 }}>
             Administra cuentas y roles de acceso al sistema
           </p>
-          <div style={{ display:'flex', gap:10 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-secondary" onClick={() => setShowPerms(true)}>
               <span className="material-icons">security</span>Ver Permisos
             </button>
@@ -120,12 +121,10 @@ const Usuarios = () => {
             const count = usuarios.filter(u => u.rol === r.value && u.activo).length;
             return (
               <div className={`rol-card ${r.color}`} key={r.value}>
-                <span className="material-icons rol-icon">
-                  {r.value === 'admin' ? 'admin_panel_settings' : r.value === 'encargado' ? 'manage_accounts' : 'person'}
-                </span>
+                <span className="material-icons rol-icon">{r.icon}</span>
                 <div>
                   <h3>{count}</h3>
-                  <p>{r.label}{count !== 1 ? 'es' : ''}</p>
+                  <p>{r.label}{count !== 1 ? (r.value === 'encargado' ? 's' : 'es') : ''}</p>
                   <small>{r.desc}</small>
                 </div>
               </div>
@@ -188,8 +187,8 @@ const Usuarios = () => {
                       )}
                     </td>
                     <td>
-                      {new Date(u.fecha_creacion).toLocaleDateString('es-ES',{
-                        day:'2-digit', month:'2-digit', year:'numeric'
+                      {new Date(u.fecha_creacion).toLocaleDateString('es-ES', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
                       })}
                     </td>
                     <td>
@@ -297,35 +296,42 @@ const Usuarios = () => {
                   <thead>
                     <tr>
                       <th>Módulo / Acción</th>
-                      <th className="col-admin">Administrador</th>
+                      <th className="col-admin">Admin</th>
                       <th className="col-encargado">Encargado</th>
                       <th className="col-operador">Operador</th>
+                      <th className="col-solicitante">Solicitante</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      ['Ver Artículos',         true,  true,  true ],
-                      ['Crear Artículos',        true,  true,  false],
-                      ['Editar Artículos',       true,  true,  false],
-                      ['Eliminar Artículos',     true,  false, false],
-                      ['Ver Stock',              true,  true,  true ],
-                      ['Ver Movimientos',        true,  true,  true ],
-                      ['Registrar Movimientos',  true,  true,  true ],
-                      ['Ver Proveedores',        true,  true,  true ],
-                      ['Crear/Editar Proveedores',true, false, false],
-                      ['Eliminar Proveedores',   true,  false, false],
-                      ['Ver Compras',            true,  true,  true ],
-                      ['Crear Órdenes de Compra',true,  true,  false],
-                      ['Recibir/Cancelar Compras',true, true,  false],
-                      ['Ver Reportes',           true,  true,  false],
-                      ['Gestionar Usuarios',     true,  false, false],
-                      ['Configuración',          true,  false, false],
-                    ].map(([mod, a, e, o]) => (
+                      ['Ver Artículos',               true,  true,  true,  true ],
+                      ['Crear Artículos',              true,  true,  false, false],
+                      ['Editar Artículos',             true,  true,  false, false],
+                      ['Eliminar Artículos',           true,  false, false, false],
+                      ['Ver Stock',                    true,  true,  true,  false],
+                      ['Ver Movimientos',              true,  true,  true,  false],
+                      ['Registrar Movimientos',        true,  true,  true,  false],
+                      ['Ver Proveedores',              true,  true,  true,  false],
+                      ['Crear/Editar Proveedores',     true,  false, false, false],
+                      ['Eliminar Proveedores',         true,  false, false, false],
+                      ['Ver Compras',                  true,  true,  true,  false],
+                      ['Crear Órdenes de Compra',      true,  true,  false, false],
+                      ['Recibir/Cancelar Compras',     true,  true,  false, false],
+                      ['Ver Reportes',                 true,  true,  false, false],
+                      ['Gestionar Usuarios',           true,  false, false, false],
+                      ['Configuración',                true,  false, false, false],
+                      ['Crear Solicitudes',            false, false, false, true ],
+                      ['Ver sus Solicitudes',          false, false, false, true ],
+                      ['Ver todas las Solicitudes',    true,  false, true,  false],
+                      ['Aprobar/Rechazar Solicitudes', true,  false, false, false],
+                      ['Completar Solicitudes',        false, false, true,  false],
+                    ].map(([mod, a, e, o, s]) => (
                       <tr key={mod}>
                         <td>{mod}</td>
                         <td className="center">{a ? '✅' : '❌'}</td>
                         <td className="center">{e ? '✅' : '❌'}</td>
                         <td className="center">{o ? '✅' : '❌'}</td>
+                        <td className="center">{s ? '✅' : '❌'}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -18,21 +18,40 @@ import Reportes from './pages/Reportes';
 import Configuracion from './pages/Configuracion';
 import Usuarios from './pages/Usuarios';
 import Proveedores from './pages/Proveedores';
+import Solicitudes from './pages/Solicitudes';
 
 // ─────────────────────────────────────────────────
 // Guard: redirige al login si no hay token.
-// Si requiredPerm está definido y el usuario no lo tiene,
-// redirige al /dashboard (no 403).
+// Si el usuario es solicitante y va a /dashboard → /solicitudes
+// Si requiredPerm definido y no lo tiene → /dashboard (o /solicitudes)
 // ─────────────────────────────────────────────────
 const PrivateRoute = ({ requiredPerm, children }) => {
+  const token    = localStorage.getItem('token');
+  if (!token) return <Navigate to="/login" replace />;
+
+  const userData = JSON.parse(localStorage.getItem('user') || '{}');
+  const permisos = userData.permisos ?? [];
+  const esSolicitante = userData.rol === 'solicitante';
+
+  // Solicitante no puede acceder a rutas que no sean las suyas
+  if (requiredPerm && !permisos.includes(requiredPerm)) {
+    return <Navigate to={esSolicitante ? '/solicitudes' : '/dashboard'} replace />;
+  }
+
+  return children;
+};
+
+// ─────────────────────────────────────────────────
+// Guard especial para /dashboard:
+// si es solicitante, redirige directo a /solicitudes
+// ─────────────────────────────────────────────────
+const DashboardRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
 
-  if (requiredPerm) {
-    const permisos = JSON.parse(localStorage.getItem('user') || '{}').permisos ?? [];
-    if (!permisos.includes(requiredPerm)) {
-      return <Navigate to="/dashboard" replace />;
-    }
+  const userData = JSON.parse(localStorage.getItem('user') || '{}');
+  if (userData.rol === 'solicitante') {
+    return <Navigate to="/solicitudes" replace />;
   }
 
   return children;
@@ -57,27 +76,27 @@ const AdminShell = () => (
 );
 
 // ─────────────────────────────────────────────────
-// Router con future flags para silenciar warnings de v7
+// Router
 // ─────────────────────────────────────────────────
 const router = createBrowserRouter(
   [
-    // ── Páginas públicas (con header/footer) ────
+    // ── Páginas públicas ────────────────────────
     {
       element: <PublicLayout />,
       children: [
-        { index: true,    element: <Home /> },
-        { path: '/login',    element: <Login /> },
+        { index: true,      element: <Home />     },
+        { path: '/login',    element: <Login />    },
         { path: '/register', element: <Register /> },
       ],
     },
 
-    // ── Panel admin (sin header/footer) ─────────
+    // ── Panel admin / solicitante ────────────────
     {
       element: <AdminShell />,
       children: [
         {
           path: '/dashboard',
-          element: <PrivateRoute><Dashboard /></PrivateRoute>,
+          element: <DashboardRoute><Dashboard /></DashboardRoute>,
         },
         {
           path: '/articulos',
@@ -107,10 +126,14 @@ const router = createBrowserRouter(
           path: '/configuracion',
           element: <PrivateRoute requiredPerm="configuracion:read"><Configuracion /></PrivateRoute>,
         },
+        {
+          path: '/solicitudes',
+          element: <PrivateRoute requiredPerm="solicitudes:read"><Solicitudes /></PrivateRoute>,
+        },
       ],
     },
 
-    // ── Catch-all ────────────────────────────────
+    // ── Catch-all ───────────────────────────────
     { path: '*', element: <Navigate to="/" replace /> },
   ],
   {

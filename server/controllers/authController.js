@@ -13,11 +13,6 @@ const signToken = (id, rol) =>
 
 // ─────────────────────────────────────────────────
 // REGISTER
-// Modos:
-//   • Setup inicial: si no existe ningún usuario en la DB,
-//     se permite el registro sin token (crea el primer admin).
-//   • Normal: requiere autenticación de admin (manejado por
-//     la ruta con requireAdmin antes de llegar aquí).
 // ─────────────────────────────────────────────────
 export const register = async (req, res) => {
   try {
@@ -27,17 +22,14 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: 'Nombre, email y contraseña son requeridos' });
     }
 
-    const rolesPermitidos = ['admin', 'encargado', 'operador'];
+    const rolesPermitidos = ['admin', 'encargado', 'operador', 'solicitante'];
     if (!rolesPermitidos.includes(rol)) {
-      return res.status(400).json({ message: 'Rol inválido. Use: admin, encargado u operador' });
+      return res.status(400).json({ message: 'Rol inválido. Use: admin, encargado, operador o solicitante' });
     }
 
-    // Modo setup inicial: verificar si hay usuarios
     const [totalUsuarios] = await db.query('SELECT COUNT(*) as total FROM usuarios');
     const esSetupInicial  = totalUsuarios[0].total === 0;
 
-    // Si NO es setup inicial y el request no viene de un admin → 403
-    // (req.userRol lo pone el authMiddleware; si no hay token es undefined)
     if (!esSetupInicial && req.userRol !== 'admin') {
       return res.status(403).json({
         message: 'Solo los administradores pueden registrar nuevos usuarios. ' +
@@ -45,7 +37,6 @@ export const register = async (req, res) => {
       });
     }
 
-    // En setup inicial, forzar rol admin
     const rolFinal = esSetupInicial ? 'admin' : rol;
 
     const [existente] = await db.query('SELECT id FROM usuarios WHERE email = ?', [email]);
@@ -177,7 +168,8 @@ export const updateUsuario = async (req, res) => {
     const { id } = req.params;
     const { nombre, email, rol, activo } = req.body;
 
-    const rolesPermitidos = ['admin', 'encargado', 'operador'];
+    // ← Incluye solicitante en los roles permitidos
+    const rolesPermitidos = ['admin', 'encargado', 'operador', 'solicitante'];
     if (rol && !rolesPermitidos.includes(rol)) {
       return res.status(400).json({ message: 'Rol inválido' });
     }
@@ -230,7 +222,6 @@ export const deleteUsuario = async (req, res) => {
 
 // ─────────────────────────────────────────────────
 // PUT /api/auth/cambiar-password
-// Usuario autenticado cambia su propia contraseña
 // ─────────────────────────────────────────────────
 export const cambiarPassword = async (req, res) => {
   try {
