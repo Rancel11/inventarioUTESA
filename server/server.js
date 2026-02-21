@@ -7,6 +7,7 @@ import articulosRoutes   from './routes/articulosRoutes.js';
 import movimientosRoutes from './routes/movimientosRoutes.js';
 import stockRoutes       from './routes/stockRoutes.js';
 import proveedoresRoutes from './routes/proveedoresRoutes.js';
+import solicitudesRoutes from './routes/solicitudes.js';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use('/api/articulos',   articulosRoutes);
 app.use('/api/movimientos', movimientosRoutes);
 app.use('/api/stock',       stockRoutes);
 app.use('/api/proveedores', proveedoresRoutes);
+app.use('/api/solicitudes', solicitudesRoutes);
 
 // ── Health check ──────────────────────────────────
 app.get('/api/health', (_req, res) =>
